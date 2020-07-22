@@ -3,102 +3,100 @@ import numpy as np
 from typing import Callable, Dict, Generator, List, Tuple, TypeVar, Union
 
 A = TypeVar('A')
+B = TypeVar('B')
 
 
 class ArrayM4:
-    __slots__ = ['shape', 'coordinate', 'size', 'a']
+    __slots__ = ['size', 'a']
 
-    def __init__(self, shape: Tuple[int, ...], x: int = 0):
+    def __init__(self, size: int, x: int = 0):
         assert 0 <= x < 4
         y = np.uint64(x)
         for i in range(1, 6):
             y = y | (y << np.uint64(2 ** i))
-        coordinate = [-1] * len(shape)
-        size = 1
-        for i in range(len(shape) - 1, -1, -1):
-            coordinate[i] = size
-            size *= shape[i]
-        self.shape = shape
-        self.coordinate = tuple(coordinate)
         self.size = size
         self.a = np.full((size + 31) // 32, y, dtype=np.uint64)
 
-    def __getitem__(self, index: Tuple[int, ...]) -> int:
-        i = sum(c * d for c, d in zip(self.coordinate, index))
+    def __getitem__(self, i: int) -> int:
         j = i // 32
         k = np.uint64(i % 32 * 2)
         return (self.a[j] >> k) & np.uint64(3)
 
-    def __setitem__(self, index: Tuple[int, ...], x: int) -> None:
+    def __setitem__(self, i: int, x: int) -> None:
         assert 0 <= x < 4
-        i = sum(c * d for c, d in zip(self.coordinate, index))
         j = i // 32
         k = np.uint64(i % 32 * 2)
         self.a[j] = (self.a[j] & ~(np.uint64(3) << k)) | (np.uint64(x) << k)
 
     def to_array(self) -> np.ndarray:
-        a = np.zeros(self.shape, dtype=np.uint8)
-        for index in np.ndindex(self.shape):
-            a[index] = self[index]
+        a = np.zeros(self.size, dtype=np.uint8)
+        for i in range(self.size):
+            a[i] = self[i]
         return a
 
 
 def bfs_dict(start: A,
-             adj: Callable[[A], Tuple[A, ...]]
-             ) -> Dict[A, int]:
-    table_dist = {start: 0}
-    depth = 0
+             adj: Callable[[A], Tuple[A, ...]],
+             key: Callable[[A], B]
+             ) -> Dict[B, int]:
+    table_dist = {key(start): 0}
     layer = [start]
+    depth = 0
     while len(layer) > 0:
         print(f'bfs_dict: depth={depth}, count={len(layer)}')
         depth += 1
         next_layer = []
         for a in layer:
             for b in adj(a):
-                if b not in table_dist:
-                    table_dist[b] = depth
+                k = key(b)
+                if k not in table_dist:
+                    table_dist[k] = depth
                     next_layer.append(b)
         layer = next_layer
     return table_dist
 
 
-def bfs_array(shape: Tuple[int, ...],
-              start: A,
-              adj: Callable[[A], Tuple[A, ...]]
-              ) -> np.ndarray:
-    table_dist = np.full(shape, 255, dtype=np.uint8)
-    table_dist[start] = 0
-    depth = 0
+def bfs(start: A,
+        adj: Callable[[A], Tuple[A, ...]],
+        size: int,
+        index: Callable[[A], int]
+        ) -> np.ndarray:
+    table_dist = np.full(size, 255, dtype=np.uint8)
+    table_dist[index(start)] = 0
     layer = [start]
+    depth = 0
     while len(layer) > 0:
-        print(f'bfs_array: depth={depth}, count={len(layer)}')
+        print(f'bfs: depth={depth}, count={len(layer)}')
         depth += 1
         next_layer = []
         for a in layer:
             for b in adj(a):
-                if table_dist[b] == 255:
-                    table_dist[b] = depth
+                i = index(b)
+                if table_dist[i] == 255:
+                    table_dist[i] = depth
                     next_layer.append(b)
         layer = next_layer
     return table_dist
 
 
-def bfs_m3(shape: Tuple[int, ...],
-           start: A,
-           adj: Callable[[A], Tuple[A, ...]]
+def bfs_m3(start: A,
+           adj: Callable[[A], Tuple[A, ...]],
+           size: int,
+           index: Callable[[A], int]
            ) -> ArrayM4:
-    table_dist = ArrayM4(shape, 3)
-    table_dist[start] = 0
-    depth = 0
+    table_dist = ArrayM4(size, 3)
+    table_dist[index(start)] = 0
     layer = [start]
+    depth = 0
     while len(layer) > 0:
         print(f'bfs_m3: depth={depth}, count={len(layer)}')
         depth += 1
         next_layer = []
         for a in layer:
             for b in adj(a):
-                if table_dist[b] == 3:
-                    table_dist[b] = depth % 3
+                i = index(b)
+                if table_dist[i] == 3:
+                    table_dist[i] = depth % 3
                     next_layer.append(b)
         layer = next_layer
     return table_dist

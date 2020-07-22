@@ -152,8 +152,7 @@ def inv_p(p: T_P) -> T_P:
 
 
 def mul_p(p: T_P, q: T_P) -> T_P:
-    m = len(p)
-    return tuple(p[q[i]] for i in range(m))
+    return tuple(p[i] for i in q)
 
 
 def generate_pi_function(table_pi_to_p: Tuple[T_P, ...]) -> (

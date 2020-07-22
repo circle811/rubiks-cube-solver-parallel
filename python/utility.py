@@ -7,8 +7,6 @@ import numpy as np
 from typing import Callable, TypeVar
 
 A = TypeVar('A')
-B = TypeVar('B')
-C = TypeVar('C')
 
 _cache_dir = os.path.join(os.path.dirname(__file__), 'cache')
 
@@ -34,16 +32,16 @@ def cache_data(name: str, generate: Callable[[], A]) -> A:
     return a
 
 
-def generate_table_mul(m: int, n: int,
-                       int_to_a: Callable[[int], A],
-                       int_to_b: Callable[[int], B],
-                       c_to_int: Callable[[C], int],
-                       mul: Callable[[A, B], C]
-                       ) -> np.ndarray:
-    table_mul = np.zeros((m, n), dtype=np.uint32)
-    list_a = [int_to_a(i) for i in range(m)]
-    list_b = [int_to_b(j) for j in range(n)]
-    for i, a in enumerate(list_a):
-        for j, b in enumerate(list_b):
-            table_mul[i, j] = c_to_int(mul(a, b))
-    return table_mul
+def generate_table_1d(m: int, f: Callable[[int], int]) -> np.ndarray:
+    table = np.zeros(m, dtype=np.uint32)
+    for i in range(m):
+        table[i] = f(i)
+    return table
+
+
+def generate_table_2d(m: int, n: int, f: Callable[[int, int], int]) -> np.ndarray:
+    table = np.zeros((m, n), dtype=np.uint32)
+    for i in range(m):
+        for j in range(n):
+            table[i, j] = f(i, j)
+    return table

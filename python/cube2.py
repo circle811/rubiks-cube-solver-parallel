@@ -10,9 +10,9 @@ from group import (
     i_p, inv_p, mul_p,
     inv_d3, mul_d3)
 
-from search import bfs_array, bfs_m3, ida_star, ida_star_m3
+from search import bfs, bfs_m3, ida_star, ida_star_m3
 
-from utility import cache_data, generate_table_mul
+from utility import cache_data, generate_table_2d
 
 """
 number of corner blocks
@@ -23,6 +23,9 @@ number of corner blocks
    *    5
 6    4
 """
+
+N_CP = p_number(7)
+N_CO = o_number(7, 3)
 
 
 class Cube2a(NamedTuple):
@@ -61,6 +64,10 @@ def cube2b_to_a(b: Cube2b) -> Cube2a:
                   int_to_o(b.co, 7, 3))
 
 
+def cube2b_to_int(b: Cube2b) -> int:
+    return b.cp * N_CO + b.co
+
+
 def i_cube2a() -> Cube2a:
     return Cube2a(i_p(7), (0,) * 7)
 
@@ -89,34 +96,29 @@ base_name = ('U', 'U2', "U'", 'R', 'R2', "R'", 'F', 'F2', "F'")
 
 IDENTITY_B = cube2a_to_b(IDENTITY)
 
-shape_cube2b = (p_number(7), o_number(7, 3))
+table_mul_cube2_cp = generate_table_2d(
+    N_CP, len(base),
+    lambda i, j: cube2a_to_b(cube2b_to_a(Cube2b(i, 0)) * base[j]).cp)
 
-table_mul_cube2_cp = generate_table_mul(shape_cube2b[0],
-                                        len(base),
-                                        lambda i: cube2b_to_a(Cube2b(i, 0)),
-                                        lambda j: base[j],
-                                        lambda a: cube2a_to_b(a).cp,
-                                        Cube2a.__mul__)
-
-table_mul_cube2_co = generate_table_mul(shape_cube2b[1],
-                                        len(base),
-                                        lambda i: cube2b_to_a(Cube2b(0, i)),
-                                        lambda j: base[j],
-                                        lambda a: cube2a_to_b(a).co,
-                                        Cube2a.__mul__)
+table_mul_cube2_co = generate_table_2d(
+    N_CO, len(base),
+    lambda i, j: cube2a_to_b(cube2b_to_a(Cube2b(0, i)) * base[j]).co)
 
 table_dist_cube2 = cache_data(
     'table_dist_cube2',
-    lambda: bfs_array(shape_cube2b, IDENTITY_B, Cube2b.adj))
+    lambda: bfs(IDENTITY_B, Cube2b.adj, N_CP * N_CO, cube2b_to_int))
 
 table_dist_m3_cube2 = cache_data(
     'table_dist_m3_cube2',
-    lambda: bfs_m3(shape_cube2b, IDENTITY_B, Cube2b.adj))
+    lambda: bfs_m3(IDENTITY_B, Cube2b.adj, N_CP * N_CO, cube2b_to_int))
 
 
 def solve(a: Cube2a, relax: int = 0) -> Tuple[Tuple[int, ...], ...]:
     result = []
-    g = ida_star(cube2a_to_b(a), IDENTITY_B, Cube2b.adj, table_dist_cube2.__getitem__)
+    g = ida_star(cube2a_to_b(a),
+                 IDENTITY_B,
+                 Cube2b.adj,
+                 lambda b: table_dist_cube2[cube2b_to_int(b)])
     for u in g:
         if isinstance(u, tuple):
             result.append(u)
@@ -128,7 +130,10 @@ def solve(a: Cube2a, relax: int = 0) -> Tuple[Tuple[int, ...], ...]:
 
 def solve_m3(a: Cube2a, relax: int = 0) -> Tuple[Tuple[int, ...], ...]:
     result = []
-    g = ida_star_m3(cube2a_to_b(a), IDENTITY_B, Cube2b.adj, table_dist_m3_cube2.__getitem__)
+    g = ida_star_m3(cube2a_to_b(a),
+                    IDENTITY_B,
+                    Cube2b.adj,
+                    lambda b: table_dist_m3_cube2[cube2b_to_int(b)])
     for u in g:
         if isinstance(u, tuple):
             result.append(u)
