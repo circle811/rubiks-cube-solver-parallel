@@ -14,264 +14,534 @@
 //  phase 1: H -> I
 
 namespace cube::_3::_2p {
-    typedef orbits <orbit<0, 1, 2, 3>, orbit<4, 5, 6, 7, 8, 9, 10, 11>> os_e;
-    typedef orbits <orbit<0>, orbit<1>, orbit<2>, orbit<3>, orbit<4>, orbit<5>, orbit<6, 7>> os_c;
+    typedef orbits <orbit<0, 1, 2, 3>, orbit<4, 5, 6, 7, 8, 9, 10, 11>> os_4_8;
+    typedef orbits <orbit<0>, orbit<1>, orbit<2>, orbit<3>, orbit<4>, orbit<5>, orbit<6, 7>> os_1x6_2;
 
     // phase 0
-    constexpr u64 n_co = number_o<8, 3>();
-    constexpr u64 n_egp = number_gp<os_e>();
-    constexpr u64 n_eo = number_o<12, 2>();
-
-    struct p0a {
-        array_u8<8> co;
-        array_u8<12> egp;
-        array_u8<12> eo;
-
-        constexpr p0a operator*(const cube3a &other) const {
-            const po<8, 3> &rc = mul_po<8, 3>(i_p<8>(), co, other.cp, other.co);
-            const po<12, 2> &re = mul_po<12, 2>(egp, eo, other.ep, other.eo);
-            return p0a{std::get<1>(rc),
-                       std::get<0>(re),
-                       std::get<1>(re)};
-        }
-
-        constexpr bool operator==(const p0a &other) const {
-            return (co == other.co) and (egp == other.egp) and (eo == other.eo);
-        }
-    };
-
-    struct p0b {
-        u32 co;
-        u32 egp_eo;
-
-        constexpr bool operator==(const p0b &other) const {
-            return (co == other.co) and (egp_eo == other.egp_eo);
-        }
-    };
-
-    constexpr p0a cube3a_to_p0a(const cube3a &a) {
-        return p0a{a.co,
-                   p_to_gp<os_e>(a.ep),
-                   a.eo};
-    }
-
-    constexpr p0b p0a_to_b(const p0a &a) {
-        return p0b{u32(o_to_int<8, 3>(a.co)),
-                   u32(gp_to_int<os_e>(a.egp) * n_eo + o_to_int<12, 2>(a.eo))};
-    }
-
-    constexpr p0a p0b_to_a(const p0b &b) {
-        return p0a{int_to_o<8, 3>(b.co),
-                   int_to_gp<os_e>(b.egp_eo / n_eo),
-                   int_to_o<12, 2>(b.egp_eo % n_eo)};
-    }
-
-    constexpr u64 p0b_to_int(const p0b &b) {
-        return b.co * (n_egp * n_eo) + b.egp_eo;
-    }
-
-    constexpr p0b int_to_p0b(u64 x) {
-        return p0b{u32(x / (n_egp * n_eo)),
-                   u32(x % (n_egp * n_eo))};
-    }
-
-    constexpr std::array<cube3a, 18> p0_base = cube3_base;
-
-    const std::array<std::string, cube3_base.size()> p0_base_name = cube3_base_name;
-
     struct p0_solver {
-        typedef p0b v_type;
+        typedef cube3 t_cube;
+        typedef u64 t_state;
+        typedef u64 t_hint;
 
-        static constexpr u64 size = n_co * n_egp * n_eo;
+        static constexpr u64 n_co = number_o<8, 3>();
+        static constexpr u64 n_egp = number_gp<os_4_8>();
+        static constexpr u64 n_eo = number_o<12, 2>();
+        static constexpr u64 n_state = n_co * n_egp * n_eo;
+        static constexpr u64 n_base = n_cube3_base;
 
-        static constexpr u64 base_size = p0_base.size();
+        static constexpr std::array<t_cube, n_base> base = cube3_base;
+        static constexpr std::array<const char *, n_base> base_name = cube3_base_name;
 
-        static constexpr v_type start = p0a_to_b(cube3a_to_p0a(cube3a::i()));
-
-        static constexpr u64 v_to_int(const v_type &a) {
-            return p0b_to_int(a);
+        static constexpr t_state cube_to_state(const t_cube &a) {
+            return o_to_int<8, 3>(a.co) * (n_egp * n_eo)
+                   + gp_to_int<os_4_8>(p_to_gp<os_4_8>(a.ep)) * n_eo
+                   + o_to_int<12, 2>(a.eo);
         }
 
-        static constexpr v_type int_to_v(u64 x) {
-            return int_to_p0b(x);
+        static constexpr u64 state_to_int(const t_state &a) {
+            return a;
         }
 
-        std::unique_ptr<array_2d < u32, n_co, base_size>> table_mul_co;
+        static constexpr t_state int_to_state(u64 x) {
+            return x;
+        }
 
-        std::unique_ptr<array_2d < u32, n_egp * n_eo, base_size>> table_mul_egp_eo;
+        static constexpr bool is_start(const t_state &a) {
+            constexpr t_state _start = cube_to_state(t_cube::i());
+            return a == _start;
+        }
 
-        std::unique_ptr<array_u2 < size>> table_dist_m3;
+        static constexpr std::array<u64, 1> alt(const t_state &a, u64 i) {
+            return std::array<u64, 1>{i};
+        }
+
+        std::unique_ptr<array_2d < u16, n_co, n_base>> mul_co;
+        std::unique_ptr<array_2d < u32, n_egp * n_eo, n_base>> mul_egp_eo;
+        std::unique_ptr<array_u2 < n_state>> distance_m3;
 
         p0_solver() {
-            table_mul_co = cache_data<array_2d<u32, n_co, base_size>>(
-                    "p0.table_mul_co",
-                    [](array_2d<u32, n_co, base_size> &t) -> void {
+            mul_co = cache_data<array_2d<u16, n_co, n_base>>(
+                    "cube3.p0.mul_co",
+                    [](array_2d<u16, n_co, n_base> &t) -> void {
                         for (u64 i = 0; i < n_co; i++) {
-                            const p0a &a = p0b_to_a(p0b{u32(i), 0});
-                            for (u64 j = 0; j < base_size; j++) {
-                                t[i][j] = p0a_to_b(a * p0_base[j]).co;
+                            array_u8<8> co = int_to_o<8, 3>(i);
+                            for (u64 j = 0; j < n_base; j++) {
+                                t[i][j] = u16(o_to_int<8, 3>(mul_o<8, 3>(co * base[j].cp, base[j].co)));
                             }
                         }
                     }
             );
-            table_mul_egp_eo = cache_data<array_2d<u32, n_egp * n_eo, base_size>>(
-                    "p0.table_mul_egp_eo",
-                    [](array_2d<u32, n_egp * n_eo, base_size> &t) -> void {
-                        for (u64 i = 0; i < (n_egp * n_eo); i++) {
-                            const p0a &a = p0b_to_a(p0b{0, u32(i)});
-                            for (u64 j = 0; j < base_size; j++) {
-                                t[i][j] = p0a_to_b(a * p0_base[j]).egp_eo;
+            mul_egp_eo = cache_data<array_2d<u32, n_egp * n_eo, n_base>>(
+                    "cube3.p0.mul_egp_eo",
+                    [](array_2d<u32, n_egp * n_eo, n_base> &t) -> void {
+                        for (u64 i = 0; i < n_egp; i++) {
+                            array_u8<12> egp = int_to_gp<os_4_8>(i);
+                            for (u64 j = 0; j < n_eo; j++) {
+                                array_u8<12> eo = int_to_o<12, 2>(j);
+                                for (u64 k = 0; k < n_base; k++) {
+                                    t[i * n_eo + j][k] =
+                                            u32(gp_to_int<os_4_8>(egp * base[k].ep) * n_eo
+                                                + o_to_int<12, 2>(mul_o<12, 2>(eo * base[k].ep, base[k].eo)));
+                                }
                             }
                         }
                     }
             );
-            table_dist_m3 = cache_data<array_u2<size>>(
-                    "p0.table_dist_m3",
-                    [this](array_u2<size> &t) {
-                        bfs_m3<p0_solver>(*this, t);
+            distance_m3 = cache_data<array_u2<n_state>>(
+                    "cube3.p0.distance_m3",
+                    [this](array_u2<n_state> &t) -> void {
+                        bfs<p0_solver>(*this, t);
                     }
             );
         }
 
-        std::array<v_type, base_size> adj(const v_type &a) const {
-            std::array<v_type, base_size> bs{};
-            for (u64 i = 0; i < base_size; i++) {
-                bs[i] = v_type{(*table_mul_co)[a.co][i],
-                               (*table_mul_egp_eo)[a.egp_eo][i]};
+        std::array<t_state, n_base> adj(const t_state &a) const {
+            const std::array<u16, n_base> &a_co = (*mul_co)[a / (n_egp * n_eo)];
+            const std::array<u32, n_base> &a_egp_eo = (*mul_egp_eo)[a % (n_egp * n_eo)];
+            std::array<t_state, n_base> a_s{};
+            for (u64 i = 0; i < n_base; i++) {
+                a_s[i] = a_co[i] * (n_egp * n_eo) + a_egp_eo[i];
             }
-            return bs;
+            return a_s;
         }
     };
+
+    // phase 0 symmetry
+    template<typename _os_e, typename U_SC, u64 _n_sc_egp_eo, const char *name>
+    struct g_p0s_solver {
+        typedef cube3 t_cube;
+
+        struct t_state {
+            u8 sym;
+            u16 co;
+            U_SC sc_egp_eo;
+        };
+
+        typedef u64 t_hint;
+
+        static constexpr u64 n_co = number_o<8, 3>();
+        static constexpr u64 n_egp = number_gp<_os_e>();
+        static constexpr u64 n_eo = number_o<12, 2>();
+        static constexpr u64 n_sc_egp_eo = _n_sc_egp_eo;
+        static constexpr u64 n_state = n_co * n_sc_egp_eo;
+        static constexpr u64 n_base = n_cube3_base;
+
+        static constexpr std::array<t_cube, n_base> base = cube3_base;
+        static constexpr std::array<const char *, n_base> base_name = cube3_base_name;
+
+        static constexpr array_2d <u8, n_base, n_s16> conj_base = generate_table_conj<cube3, n_base, n_s16>(
+                base, elements_s16);
+
+        std::unique_ptr<array_2d < u16, n_co, n_s16>> conj_co;
+        std::unique_ptr<array_2d < u16, n_co, n_base>> mul_co;
+        std::unique_ptr<table_conj_mul < u32, U_SC, u16, n_egp * n_eo, n_sc_egp_eo, n_s16, n_base>> conj_mul_egp_eo;
+        std::unique_ptr<array_u2 < n_state>> distance_m3;
+        t_state _start;
+
+        g_p0s_solver() {
+            conj_co = cache_data<array_2d<u16, n_co, n_s16>>(
+                    std::string("cube3.") + name + ".conj_co",
+                    [](array_2d<u16, n_co, n_s16> &t) -> void {
+                        cube3 a = cube3::i();
+                        for (u64 i = 0; i < n_co; i++) {
+                            a.co = int_to_o<8, 3>(i);
+                            for (u64 s = 0; s < n_s16; s++) {
+                                cube3 b = elements_s16[inv_s16[s]] * a * elements_s16[s];
+                                t[i][s] = u16(o_to_int<8, 3>(b.co));
+                            }
+                        }
+                    }
+            );
+            mul_co = cache_data<array_2d<u16, n_co, n_base>>(
+                    std::string("cube3.") + name + ".mul_co",
+                    [](array_2d<u16, n_co, n_base> &t) -> void {
+                        for (u64 i = 0; i < n_co; i++) {
+                            array_u8<8> co = int_to_o<8, 3>(i);
+                            for (u64 j = 0; j < n_base; j++) {
+                                t[i][j] = u16(o_to_int<8, 3>(mul_o<8, 3>(co * base[j].cp, base[j].co)));
+                            }
+                        }
+                    }
+            );
+            conj_mul_egp_eo = cache_data<table_conj_mul<u32, U_SC, u16, n_egp * n_eo, n_sc_egp_eo, n_s16, n_base>>(
+                    std::string("cube3.") + name + ".conj_mul_egp_eo",
+                    [](table_conj_mul<u32, U_SC, u16, n_egp * n_eo, n_sc_egp_eo, n_s16, n_base> &cm) -> void {
+                        cm.init(
+                                [](u32 i) -> std::array<u32, n_s16> {
+                                    cube3 a = cube3::i();
+                                    a.ep = gp_to_p<_os_e>(int_to_gp<_os_e>(i / n_eo));
+                                    a.eo = int_to_o<12, 2>(i % n_eo);
+                                    std::array<u32, n_s16> conj_i{};
+                                    for (u64 s = 0; s < n_s16; s++) {
+                                        cube3 b = elements_s16[inv_s16[s]] * a * elements_s16[s];
+                                        conj_i[s] = u32(gp_to_int<_os_e>(p_to_gp<_os_e>(b.ep)) * n_eo
+                                                        + o_to_int<12, 2>(b.eo));
+                                    }
+                                    return conj_i;
+                                },
+                                [](u32 i) -> std::array<u32, n_base> {
+                                    array_u8<12> egp = int_to_gp<_os_e>(i / n_eo);
+                                    array_u8<12> eo = int_to_o<12, 2>(i % n_eo);
+                                    std::array<u32, n_base> mul_i{};
+                                    for (u64 j = 0; j < n_base; j++) {
+                                        mul_i[j] = u32(gp_to_int<_os_e>(egp * base[j].ep) * n_eo
+                                                       + o_to_int<12, 2>(mul_o<12, 2>(eo * base[j].ep, base[j].eo)));
+                                    }
+                                    return mul_i;
+                                }
+                        );
+                    }
+            );
+            distance_m3 = cache_data<array_u2<n_state>>(
+                    std::string("cube3.") + name + ".distance_m3",
+                    [this](array_u2<n_state> &t) -> void {
+                        bfs<g_p0s_solver<_os_e, U_SC, _n_sc_egp_eo, name>>(*this, t);
+                    }
+            );
+            _start = cube_to_state(t_cube::i());
+        }
+
+        t_state cube_to_state(const t_cube &a) const {
+            u64 egp_eo = gp_to_int<_os_e>(p_to_gp<_os_e>(a.ep)) * n_eo + o_to_int<12, 2>(a.eo);
+            auto[sym, sc] = conj_mul_egp_eo->g_to_sym_sc(egp_eo);
+            return t_state{
+                    sym,
+                    (*conj_co)[o_to_int<8, 3>(a.co)][inv_s16[sym]],
+                    sc
+            };
+        }
+
+        u64 state_to_int(const t_state &a) const {
+            return a.co * n_sc_egp_eo + a.sc_egp_eo;
+        }
+
+        t_state int_to_state(u64 x) const {
+            return t_state{
+                    0,
+                    u16(x / n_sc_egp_eo),
+                    U_SC(x % n_sc_egp_eo)
+            };
+        }
+
+        bool is_start(const t_state &a) const {
+            return a.co == _start.co and a.sc_egp_eo == _start.sc_egp_eo;
+        }
+
+        std::array<t_state, n_base> adj(const t_state &a) const {
+            const std::array<u16, n_base> &a_co = (*mul_co)[a.co];
+            const std::array<u8, n_base> &a_sym = conj_mul_egp_eo->mul_sc_sym[a.sc_egp_eo];
+            const std::array<U_SC, n_base> &a_sc = conj_mul_egp_eo->mul_sc_sc[a.sc_egp_eo];
+            std::array<t_state, n_base> a_s{};
+            for (u64 i = 0; i < n_base; i++) {
+                u64 conj_i = conj_base[i][inv_s16[a.sym]];
+                u64 sym = a_sym[conj_i];
+                a_s[i] = t_state{
+                        mul_s16[sym][a.sym],
+                        (*conj_co)[a_co[conj_i]][inv_s16[sym]],
+                        a_sc[conj_i]
+                };
+            }
+            return a_s;
+        }
+
+        std::set<u64> alt(const t_state &a, u64 i) const {
+            u64 ss = conj_mul_egp_eo->sc_to_ss[a.sc_egp_eo];
+            if (ss == 1) {
+                return std::set<u64>{i};
+            }
+            std::set<u64> a_i{};
+            for (u64 s = 0; s < n_s16; s++) {
+                if ((ss >> s) & u64(1)) {
+                    a_i.insert(state_to_int(t_state{
+                            0,
+                            (*conj_co)[a.co][s],
+                            a.sc_egp_eo
+                    }));
+                }
+            }
+            return a_i;
+        }
+    };
+
+    constexpr char _p0s[] = "p0s";
+    typedef g_p0s_solver<os_4_8, u16, 64430, _p0s> p0s_solver;
 
     // phase 1
-    constexpr u64 n_cgp = number_gp<os_c>();
-    constexpr u64 n_ep0 = number_p<4>();
-    constexpr u64 n_ep1 = number_p<8>();
-
-    struct p1a {
-        array_u8<8> cgp;
-        array_u8<4> ep0;
-        array_u8<8> ep1;
-
-        constexpr p1a operator*(const cube3a &other) const {
-            const os_e::pp_type &pp = p_to_pp<os_e>(other.ep);
-            return p1a{mul_p<8>(cgp, other.cp),
-                       mul_p<4>(ep0, std::get<0>(pp)),
-                       mul_p<8>(ep1, std::get<1>(pp))};
-        }
-
-        constexpr bool operator==(const p1a &other) const {
-            return cgp == other.cgp and ep0 == other.ep0 and ep1 == other.ep1;
-        }
-    };
-
-    struct p1b {
-        u32 cgp;
-        u32 ep0_ep1;
-
-        constexpr bool operator==(const p1b &other) const {
-            return (cgp == other.cgp) and (ep0_ep1 == other.ep0_ep1);
-        }
-    };
-
-    constexpr p1a cube3a_to_p1a(const cube3a &a) {
-        const os_e::pp_type &pp = p_to_pp<os_e>(a.ep);
-        return p1a{p_to_gp<os_c>(a.cp),
-                   std::get<0>(pp),
-                   std::get<1>(pp)};
-    }
-
-    constexpr p1b p1a_to_b(const p1a &a) {
-        return p1b{u32(gp_to_int<os_c>(a.cgp)),
-                   u32(p_to_int<4>(a.ep0) * n_ep1 + p_to_int<8>(a.ep1))};
-    }
-
-    constexpr p1a p1b_to_a(const p1b &b) {
-        return p1a{int_to_gp<os_c>(b.cgp),
-                   int_to_p<4>(b.ep0_ep1 / n_ep1),
-                   int_to_p<8>(b.ep0_ep1 % n_ep1)};
-    }
-
-    constexpr u64 p1b_to_int(const p1b &b) {
-        return b.cgp * (n_ep0 * n_ep1) + b.ep0_ep1;
-    }
-
-    constexpr p1b int_to_p1b(u64 x) {
-        return p1b{u32(x / (n_ep0 * n_ep1)),
-                   u32(x % (n_ep0 * n_ep1))};
-    }
-
-    constexpr std::array<cube3a, 10> p1_base{
-            U1, U2, U3, D1, D2, D3,
-            R2, L2, F2, B2
-    };
-
-    const std::array<std::string, p1_base.size()> p1_base_name{
-            "U", "U2", "U'", "D", "D2", "D'",
-            "R2", "L2", "F2", "B2"
-    };
-
     struct p1_solver {
-        typedef p1b v_type;
+        typedef cube3 t_cube;
+        typedef u64 t_state;
+        typedef u64 t_hint;
 
-        static constexpr u64 size = n_cgp * n_ep0 * n_ep1;
+        static constexpr u64 n_cgp = number_gp<os_1x6_2>();
+        static constexpr u64 n_ep4 = number_p<4>();
+        static constexpr u64 n_ep8 = number_p<8>();
+        static constexpr u64 n_state = n_cgp * n_ep4 * n_ep8;
+        static constexpr u64 n_base = 10;
 
-        static constexpr u64 base_size = p1_base.size();
+        static constexpr std::array<u64, n_base> base_index{
+                0, 1, 2, 3, 4, 5, 7, 10, 13, 16
+        };
+        static constexpr std::array<t_cube, n_base> base = array_sub<cube3, n_cube3_base, n_base>(
+                cube3_base, base_index);
+        static constexpr std::array<const char *, n_base> base_name = array_sub<const char *, n_cube3_base, n_base>(
+                cube3_base_name, base_index);
 
-        static constexpr v_type start = p1a_to_b(cube3a_to_p1a(cube3a::i()));
-
-        static constexpr u64 v_to_int(const v_type &a) {
-            return p1b_to_int(a);
+        static constexpr t_state cube_to_state(const t_cube &a) {
+            array_u8<8> cgp = p_to_gp<os_1x6_2>(a.cp);
+            auto[ep4, ep8] = p_to_pp<os_4_8>(a.ep);
+            return gp_to_int<os_1x6_2>(cgp) * (n_ep4 * n_ep8)
+                   + p_to_int<4>(ep4) * n_ep8
+                   + p_to_int<8>(ep8);
         }
 
-        static constexpr v_type int_to_v(u64 x) {
-            return int_to_p1b(x);
+        static constexpr u64 state_to_int(const t_state &a) {
+            return a;
         }
 
-        std::unique_ptr<array_2d < u32, n_cgp, base_size>> table_mul_cgp;
+        static constexpr t_state int_to_state(u64 x) {
+            return x;
+        }
 
-        std::unique_ptr<array_2d < u32, n_ep0 * n_ep1, base_size>> table_mul_ep0_ep1;
+        static constexpr bool is_start(const t_state &a) {
+            constexpr t_state _start = cube_to_state(t_cube::i());
+            return a == _start;
+        }
 
-        std::unique_ptr<array_u2 < size>> table_dist_m3;
+        static constexpr std::array<u64, 1> alt(const t_state &a, u64 i) {
+            return std::array<u64, 1>{i};
+        }
+
+        std::unique_ptr<array_2d < u16, n_cgp, n_base>> mul_cgp;
+        std::unique_ptr<array_2d < u32, n_ep4 * n_ep8, n_base>> mul_ep4_ep8;
+        std::unique_ptr<array_u2 < n_state>> distance_m3;
 
         p1_solver() {
-            table_mul_cgp = cache_data<array_2d<u32, n_cgp, base_size>>(
-                    "p1.table_mul_cgp",
-                    [](array_2d<u32, n_cgp, base_size> &t) -> void {
+            mul_cgp = cache_data<array_2d<u16, n_cgp, n_base>>(
+                    "cube3.p1.mul_cgp",
+                    [](array_2d<u16, n_cgp, n_base> &t) -> void {
                         for (u64 i = 0; i < n_cgp; i++) {
-                            const p1a &a = p1b_to_a(p1b{u32(i), 0});
-                            for (u64 j = 0; j < base_size; j++) {
-                                t[i][j] = p1a_to_b(a * p1_base[j]).cgp;
+                            array_u8<8> cgp = int_to_gp<os_1x6_2>(i);
+                            for (u64 j = 0; j < n_base; j++) {
+                                t[i][j] = u16(gp_to_int<os_1x6_2>(cgp * base[j].cp));
                             }
                         }
                     }
             );
-            table_mul_ep0_ep1 = cache_data<array_2d<u32, n_ep0 * n_ep1, base_size>>(
-                    "p1.table_mul_ep0_ep1",
-                    [](array_2d<u32, n_ep0 * n_ep1, base_size> &t) -> void {
-                        for (u64 i = 0; i < (n_ep0 * n_ep1); i++) {
-                            const p1a &a = p1b_to_a(p1b{0, u32(i)});
-                            for (u64 j = 0; j < base_size; j++) {
-                                t[i][j] = p1a_to_b(a * p1_base[j]).ep0_ep1;
+            mul_ep4_ep8 = cache_data<array_2d<u32, n_ep4 * n_ep8, n_base>>(
+                    "cube3.p1.mul_ep4_ep8",
+                    [](array_2d<u32, n_ep4 * n_ep8, n_base> &t) -> void {
+                        for (u64 i = 0; i < n_ep4; i++) {
+                            array_u8<4> ep4 = int_to_p<4>(i);
+                            for (u64 j = 0; j < n_ep8; j++) {
+                                array_u8<8> ep8 = int_to_p<8>(j);
+                                for (u64 k = 0; k < n_base; k++) {
+                                    auto[b_ep4, b_ep8] = p_to_pp<os_4_8>(base[k].ep);
+                                    t[i * n_ep8 + j][k] =
+                                            u32(p_to_int<4>(ep4 * b_ep4) * n_ep8 + p_to_int<8>(ep8 * b_ep8));
+                                }
                             }
                         }
                     }
             );
-            table_dist_m3 = cache_data<array_u2<size>>(
-                    "p1.table_dist_m3",
-                    [this](array_u2<size> &t) {
-                        bfs_m3<p1_solver>(*this, t);
+            distance_m3 = cache_data<array_u2<n_state>>(
+                    "cube3.p1.distance_m3",
+                    [this](array_u2<n_state> &t) -> void {
+                        bfs<p1_solver>(*this, t);
                     }
             );
         }
 
-        std::array<v_type, base_size> adj(const v_type &a) const {
-            std::array<v_type, base_size> bs{};
-            for (u64 i = 0; i < base_size; i++) {
-                bs[i] = v_type{(*table_mul_cgp)[a.cgp][i],
-                               (*table_mul_ep0_ep1)[a.ep0_ep1][i]};
+        std::array<t_state, n_base> adj(const t_state &a) const {
+            const std::array<u16, n_base> &a_cgp = (*mul_cgp)[a / (n_ep4 * n_ep8)];
+            const std::array<u32, n_base> &a_ep4_ep8 = (*mul_ep4_ep8)[a % (n_ep4 * n_ep8)];
+            std::array<t_state, n_base> a_s{};
+            for (u64 i = 0; i < n_base; i++) {
+                a_s[i] = a_cgp[i] * (n_ep4 * n_ep8) + a_ep4_ep8[i];
             }
-            return bs;
+            return a_s;
+        }
+    };
+
+    // phase 1 symmetry
+    struct p1s_solver {
+        typedef cube3 t_cube;
+
+        struct t_state {
+            u8 sym;
+            u16 cp;
+            u16 sc_ep4_ep8;
+        };
+
+        typedef u64 t_hint;
+
+        static constexpr u64 n_cp = number_p<8>();
+        static constexpr u64 n_ep4 = number_p<4>();
+        static constexpr u64 n_ep8 = number_p<8>();
+        static constexpr u64 n_sc_ep4_ep8 = 62432;
+        static constexpr u64 n_state = n_cp * n_sc_ep4_ep8 / 2;
+        static constexpr u64 n_base = 10;
+
+        static constexpr std::array<u64, n_base> base_index{
+                0, 1, 2, 3, 4, 5, 7, 10, 13, 16
+        };
+        static constexpr std::array<t_cube, n_base> base = array_sub<cube3, n_cube3_base, n_base>(
+                cube3_base, base_index);
+        static constexpr std::array<const char *, n_base> base_name = array_sub<const char *, n_cube3_base, n_base>(
+                cube3_base_name, base_index);
+
+        static constexpr array_2d <u8, n_base, n_s16> conj_base = generate_table_conj<cube3, n_base, n_s16>(
+                base, elements_s16);
+
+        std::unique_ptr<array_2d < u16, n_cp, n_s16>> conj_cp;
+        std::unique_ptr<array_2d < u16, n_cp, n_base>> mul_cp;
+        std::unique_ptr<table_conj_mul < u32, u16, u16, n_ep4 * n_ep8, n_sc_ep4_ep8, n_s16, n_base>> conj_mul_ep4_ep8;
+        std::unique_ptr<std::array<u8, n_cp>> parity_p8;
+        std::unique_ptr<std::array<u8, n_sc_ep4_ep8>> parity_sc_ep4_ep8;
+        std::unique_ptr<array_u2 < n_state>> distance_m3;
+        t_state _start;
+
+        p1s_solver() {
+            conj_cp = cache_data<array_2d<u16, n_cp, n_s16>>(
+                    "cube3.p1s.conj_cp",
+                    [](array_2d<u16, n_cp, n_s16> &t) -> void {
+                        cube3 a = cube3::i();
+                        for (u64 i = 0; i < n_cp; i++) {
+                            a.cp = int_to_p<8>(i);
+                            for (u64 s = 0; s < n_s16; s++) {
+                                cube3 b = elements_s16[inv_s16[s]] * a * elements_s16[s];
+                                t[i][s] = u16(p_to_int<8>(b.cp));
+                            }
+                        }
+                    }
+            );
+            mul_cp = cache_data<array_2d<u16, n_cp, n_base>>(
+                    "cube3.p1s.mul_cp",
+                    [](array_2d<u16, n_cp, n_base> &t) -> void {
+                        for (u64 i = 0; i < n_cp; i++) {
+                            array_u8<8> cp = int_to_p<8>(i);
+                            for (u64 j = 0; j < n_base; j++) {
+                                t[i][j] = u16(p_to_int<8>(cp * base[j].cp));
+                            }
+                        }
+                    }
+            );
+            conj_mul_ep4_ep8 = cache_data<table_conj_mul<u32, u16, u16, n_ep4 * n_ep8, n_sc_ep4_ep8, n_s16, n_base>>(
+                    "cube3.p1s.conj_mul_ep4_ep8",
+                    [](table_conj_mul<u32, u16, u16, n_ep4 * n_ep8, n_sc_ep4_ep8, n_s16, n_base> &cm) -> void {
+                        cm.init(
+                                [](u32 i) -> std::array<u32, n_s16> {
+                                    cube3 a = cube3::i();
+                                    a.ep = pp_to_p<os_4_8>({int_to_p<4>(i / n_ep8), int_to_p<8>(i % n_ep8)});
+                                    std::array<u32, n_s16> conj_i{};
+                                    for (u64 s = 0; s < n_s16; s++) {
+                                        cube3 b = elements_s16[inv_s16[s]] * a * elements_s16[s];
+                                        auto[ep4, ep8] = p_to_pp<os_4_8>(b.ep);
+                                        conj_i[s] = u32(p_to_int<4>(ep4) * n_ep8 + p_to_int<8>(ep8));
+                                    }
+                                    return conj_i;
+                                },
+                                [](u32 i) -> std::array<u32, n_base> {
+                                    array_u8<4> ep4 = int_to_p<4>(i / n_ep8);
+                                    array_u8<8> ep8 = int_to_p<8>(i % n_ep8);
+                                    std::array<u32, n_base> mul_i{};
+                                    for (u64 j = 0; j < n_base; j++) {
+                                        auto[b_ep4, b_ep8] = p_to_pp<os_4_8>(base[j].ep);
+                                        mul_i[j] = u32(p_to_int<4>(ep4 * b_ep4) * n_ep8 + p_to_int<8>(ep8 * b_ep8));
+                                    }
+                                    return mul_i;
+                                }
+                        );
+                    }
+            );
+            parity_p8 = cache_data<std::array<u8, n_cp>>(
+                    "cube3.p1s.parity_p8",
+                    [](std::array<u8, n_cp> &t) -> void {
+                        for (u64 i = 0; i < n_cp; i++) {
+                            t[i] = u8(parity_p<8>(int_to_p<8>(i)));
+                        }
+                    }
+            );
+            parity_sc_ep4_ep8 = cache_data<std::array<u8, n_sc_ep4_ep8>>(
+                    "cube3.p1s.parity_sc_ep4_ep8",
+                    [this](std::array<u8, n_sc_ep4_ep8> &t) -> void {
+                        for (u64 i = 0; i < n_sc_ep4_ep8; i++) {
+                            u64 ep4_ep8 = conj_mul_ep4_ep8->sc_to_g[i];
+                            t[i] = u8((*parity_p8)[ep4_ep8 / n_ep8] ^ (*parity_p8)[ep4_ep8 % n_ep8]);
+                        }
+                    }
+            );
+            distance_m3 = cache_data<array_u2<n_state>>(
+                    "cube3.p1s.distance_m3",
+                    [this](array_u2<n_state> &t) -> void {
+                        bfs<p1s_solver>(*this, t);
+                    }
+            );
+            _start = cube_to_state(t_cube::i());
+        }
+
+        t_state cube_to_state(const t_cube &a) const {
+            auto[ep4, ep8] = p_to_pp<os_4_8>(a.ep);
+            u64 ep4_ep8 = p_to_int<4>(ep4) * n_ep8 + p_to_int<8>(ep8);
+            auto[sym, sc] = conj_mul_ep4_ep8->g_to_sym_sc(ep4_ep8);
+            return t_state{
+                    sym,
+                    (*conj_cp)[p_to_int<8>(a.cp)][inv_s16[sym]],
+                    sc
+            };
+        }
+
+        u64 state_to_int(const t_state &a) const {
+            return (a.cp / 2) * n_sc_ep4_ep8 + a.sc_ep4_ep8;
+        }
+
+        t_state int_to_state(u64 x) const {
+            u64 cp_a = (x / n_sc_ep4_ep8) * 2;
+            u64 sc = x % n_sc_ep4_ep8;
+            u64 cp = cp_a ^(*parity_p8)[cp_a] ^(*parity_sc_ep4_ep8)[sc];
+            return t_state{
+                    0,
+                    u16(cp),
+                    u16(sc)
+            };
+        }
+
+        bool is_start(const t_state &a) const {
+            return a.cp == _start.cp and a.sc_ep4_ep8 == _start.sc_ep4_ep8;
+        }
+
+        std::array<t_state, n_base> adj(const t_state &a) const {
+            const std::array<u16, n_base> &a_cp = (*mul_cp)[a.cp];
+            const std::array<u8, n_base> &a_sym = conj_mul_ep4_ep8->mul_sc_sym[a.sc_ep4_ep8];
+            const std::array<u16, n_base> &a_sc = conj_mul_ep4_ep8->mul_sc_sc[a.sc_ep4_ep8];
+            std::array<t_state, n_base> a_s{};
+            for (u64 i = 0; i < n_base; i++) {
+                u64 conj_i = conj_base[i][inv_s16[a.sym]];
+                u64 sym = a_sym[conj_i];
+                a_s[i] = t_state{
+                        mul_s16[sym][a.sym],
+                        (*conj_cp)[a_cp[conj_i]][inv_s16[sym]],
+                        a_sc[conj_i]
+                };
+            }
+            return a_s;
+        }
+
+        std::set<u64> alt(const t_state &a, u64 i) const {
+            u64 ss = conj_mul_ep4_ep8->sc_to_ss[a.sc_ep4_ep8];
+            if (ss == 1) {
+                return std::set<u64>{i};
+            }
+            std::set<u64> a_i{};
+            for (u64 s = 0; s < n_s16; s++) {
+                if ((ss >> s) & u64(1)) {
+                    a_i.insert(state_to_int(t_state{
+                            0,
+                            (*conj_cp)[a.cp][s],
+                            a.sc_ep4_ep8
+                    }));
+                }
+            }
+            return a_i;
         }
     };
 }
