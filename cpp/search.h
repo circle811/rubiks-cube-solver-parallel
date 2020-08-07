@@ -19,14 +19,12 @@ namespace cube {
         }
 
         void set(u64 i, u64 x) {
-            assert (x < 4);
             u64 j = i / 32;
             u64 k = i % 32 * 2;
             a[j] = (a[j] & ~(u64(3) << k)) | (x << k);
         }
 
         void fill(u64 x) {
-            assert (x < 4);
             u64 y = x;
             for (u64 i = 1; i < 6; i++) {
                 y = y | (y << (u64(1) << i));
@@ -36,58 +34,74 @@ namespace cube {
     };
 
     template<typename _solver>
-    void bfs_m3(const _solver &s, array_u2<_solver::size> &table_dist_m3) {
-        constexpr std::array<u64, 3> alt{
+    u64 set_alt(const _solver &s, array_u2<_solver::n_state> &distance_m3,
+                const typename _solver::t_state &a, u64 i, u64 x) {
+        auto alt = s.alt(a, i);
+        for (u64 j: alt) {
+            distance_m3.set(j, x);
+        }
+        return alt.size();
+    }
+
+    template<typename _solver>
+    void bfs(const _solver &s, array_u2<_solver::n_state> &distance_m3) {
+        constexpr std::array<u64, 3> modify{
                 0xffffffffffffffff,
                 0xaaaaaaaaaaaaaaaa,
-                0x5555555555555555,
+                0x5555555555555555
         };
         constexpr u64 mask = 0x5555555555555555;
-        table_dist_m3.fill(3);
-        table_dist_m3.set(s.v_to_int(_solver::start), 0);
-        std::cout << "bfs_m3: depth=" << 0 << ", count=" << 1 << std::endl;
+        distance_m3.fill(3);
+        typename _solver::t_state a_start = s.cube_to_state(_solver::t_cube::i());
+        u64 i_start = s.state_to_int(a_start);
+        u64 count_start = set_alt<_solver>(s, distance_m3, a_start, i_start, 0);
+        std::cout << "bfs: depth=" << 0 << ", count_distinct=" << 1 << ", count=" << count_start << std::endl;
         u64 depth = 1;
-        u64 total = 1;
-        std::array<u64, 3> count_m3{1, 0, 0};
-        while (total != _solver::size) {
+        u64 total_count_distinct = 1;
+        u64 total_count = count_start;
+        std::array<u64, 3> count_m3{count_start, 0, 0};
+        auto t0 = std::chrono::steady_clock::now();
+        auto t1 = t0;
+        while (total_count != _solver::n_state) {
             u64 prev_depth_m3 = (depth - 1) % 3;
             u64 depth_m3 = depth % 3;
+            u64 count_distinct = 0;
             u64 count = 0;
-            if (count_m3[prev_depth_m3] <= _solver::size - total) {
-                for (u64 i = 0; i < _solver::size; i += 32) {
-                    u64 x = table_dist_m3.a[i / 32] ^alt[prev_depth_m3];
+            if (count_m3[prev_depth_m3] <= _solver::n_state - total_count) {
+                for (u64 i = 0; i < _solver::n_state; i += 32) {
+                    u64 x = distance_m3.a[i / 32] ^modify[prev_depth_m3];
                     if (((x >> u64(1)) & x & mask) == 0) {
                         continue;
                     }
-                    u64 end = i + 32 < _solver::size ? i + 32 : _solver::size;
-                    for (u64 i_a = i; i_a < end; i_a++) {
-                        if (table_dist_m3.get(i_a) == prev_depth_m3) {
-                            const typename _solver::v_type &a = s.int_to_v(i_a);
-                            for (const typename _solver::v_type &b: s.adj(a)) {
-                                u64 i_b = s.v_to_int(b);
-                                if (table_dist_m3.get(i_b) == 3) {
-                                    table_dist_m3.set(i_b, depth_m3);
-                                    count++;
+                    u64 end = std::min(i + 32, _solver::n_state);
+                    for (u64 j = i; j < end; j++) {
+                        if (distance_m3.get(j) == prev_depth_m3) {
+                            typename _solver::t_state a = s.int_to_state(j);
+                            for (const typename _solver::t_state &b: s.adj(a)) {
+                                u64 k = s.state_to_int(b);
+                                if (distance_m3.get(k) == 3) {
+                                    count += set_alt<_solver>(s, distance_m3, b, k, depth_m3);
+                                    count_distinct++;
                                 }
                             }
                         }
                     }
                 }
             } else {
-                for (u64 i = 0; i < _solver::size; i += 32) {
-                    u64 x = table_dist_m3.a[i / 32];
+                for (u64 i = 0; i < _solver::n_state; i += 32) {
+                    u64 x = distance_m3.a[i / 32];
                     if (((x >> u64(1)) & x & mask) == 0) {
                         continue;
                     }
-                    u64 end = i + 32 < _solver::size ? i + 32 : _solver::size;
-                    for (u64 i_b = i; i_b < end; i_b++) {
-                        if (table_dist_m3.get(i_b) == 3) {
-                            const typename _solver::v_type &b = s.int_to_v(i_b);
-                            for (const typename _solver::v_type &a: s.adj(b)) {
-                                u64 i_a = s.v_to_int(a);
-                                if (table_dist_m3.get(i_a) == prev_depth_m3) {
-                                    table_dist_m3.set(i_b, depth_m3);
-                                    count++;
+                    u64 end = std::min(i + 32, _solver::n_state);
+                    for (u64 j = i; j < end; j++) {
+                        if (distance_m3.get(j) == 3) {
+                            typename _solver::t_state a = s.int_to_state(j);
+                            for (const typename _solver::t_state &b: s.adj(a)) {
+                                u64 k = s.state_to_int(b);
+                                if (distance_m3.get(k) == prev_depth_m3) {
+                                    count += set_alt<_solver>(s, distance_m3, a, j, depth_m3);
+                                    count_distinct++;
                                     break;
                                 }
                             }
@@ -95,128 +109,54 @@ namespace cube {
                     }
                 }
             }
-            std::cout << "bfs_m3: depth=" << depth << ", count=" << count << std::endl;
+            auto t2 = std::chrono::steady_clock::now();
+            std::chrono::duration<double> d = t2 - t1;
+            t1 = t2;
+            std::cout << "bfs: depth=" << depth << ", count_distinct=" << count_distinct << ", count=" << count
+                      << ", time=" << d.count() << "s" << std::endl;
             depth++;
-            total += count;
+            total_count_distinct += count_distinct;
+            total_count += count;
             count_m3[depth_m3] += count;
         }
+        std::chrono::duration<double> d = t1 - t0;
+        std::cout << "bfs: total_count_distinct=" << total_count_distinct << ", total_count=" << total_count
+                  << ", time=" << d.count() << "s" << std::endl;
     }
 
     template<typename _solver>
-    u64 get_dist_m3(const _solver &s, const typename _solver::v_type &a) {
-        return s.table_dist_m3->get(s.v_to_int(a));
-    }
-
-    template<typename _solver>
-    u64 _dfs_dist(const _solver &s, const typename _solver::v_type &a, u64 depth) {
-        if (a == _solver::start) {
-            return depth;
-        } else {
-            u64 t = (get_dist_m3<_solver>(s, a) + 2) % 3;
-            for (const typename _solver::v_type &b: s.adj(a)) {
-                if (get_dist_m3<_solver>(s, b) == t) {
-                    return _dfs_dist<_solver>(s, b, depth + 1);
+    std::tuple<u64, typename _solver::t_hint> get_distance(const _solver &s, const typename _solver::t_state &a) {
+        typename _solver::t_state b = a;
+        u64 i = s.state_to_int(b);
+        u64 depth = 0;
+        while (not s.is_start(b)) {
+            u64 target = (s.distance_m3->get(i) + 2) % 3;
+            bool found = false;
+            for (const typename _solver::t_state &c: s.adj(b)) {
+                u64 j = s.state_to_int(c);
+                if (s.distance_m3->get(j) == target) {
+                    b = c;
+                    i = j;
+                    depth++;
+                    found = true;
+                    break;
                 }
             }
-            assert (false);
+            assert (found);
         }
+        return {depth, depth};
+    }
+
+    constexpr u64 computer_distance(u64 distance_m3, u64 distance_adj) {
+        return distance_adj + (distance_m3 - distance_adj - 3) % 3 - 1;
     }
 
     template<typename _solver>
-    u64 get_dist(const _solver &s, const typename _solver::v_type &a) {
-        return _dfs_dist<_solver>(s, a, 0);
+    std::tuple<u64, typename _solver::t_hint> get_distance_hint(
+            const _solver &s, const typename _solver::t_state &a, const typename _solver::t_hint &hint) {
+        u64 d = computer_distance(s.distance_m3->get(s.state_to_int(a)), hint);
+        return {d, d};
     }
-
-    constexpr u64 compute_dist(u64 dist_adj, u64 dist_m3) {
-        return dist_adj + (dist_m3 - dist_adj - 3) % 3 - 1;
-    }
-
-    typedef std::function<void(const std::vector<u64> &)> action_type;
-
-    template<typename _solver>
-    void _dfs_m3(const _solver &s, const typename _solver::v_type &a, u64 dist_a, u64 max_depth,
-                 std::vector<u64> &moves, std::array<u64, 3> &count, const action_type &action) {
-        count[0]++;
-        if (moves.size() == max_depth) {
-            count[1]++;
-            if (a == _solver::start) {
-                count[2]++;
-                action(moves);
-            }
-        } else {
-            const std::array<typename _solver::v_type, _solver::base_size> &bs = s.adj(a);
-            for (u64 i = 0; i < _solver::base_size; i++) {
-                const typename _solver::v_type &b = bs[i];
-                u64 dist_b = compute_dist(dist_a, get_dist_m3<_solver>(s, b));
-                if (moves.size() + 1 + dist_b <= max_depth) {
-                    moves.push_back(i);
-                    _dfs_m3<_solver>(s, b, dist_b, max_depth, moves, count, action);
-                    moves.pop_back();
-                }
-            }
-        }
-    }
-
-    template<typename _solver>
-    void ida_star_m3(const _solver &s, const typename _solver::v_type &a, u64 addition, const action_type &action) {
-        u64 dist_a = get_dist<_solver>(s, a);
-        for (u64 max_depth = dist_a; max_depth <= dist_a + addition; max_depth++) {
-            std::cout << "ida_star_m3: max_depth=" << max_depth << std::endl;
-            std::vector<u64> moves{};
-            std::array<u64, 3> count{0, 0, 0};
-            _dfs_m3<_solver>(s, a, dist_a, max_depth, moves, count, action);
-            std::cout << "ida_star_m3: max_depth=" << max_depth
-                      << ", count=(" << count[0] << " " << count[1] << " " << count[2] << ")"
-                      << std::endl;
-        }
-    }
-
-    template<typename _solver>
-    std::vector<std::vector<u64>> solve(const _solver &s, const typename _solver::v_type &a) {
-        std::vector<std::vector<u64>> vector_moves{};
-        ida_star_m3<_solver>(
-                s, a, 0,
-                [&vector_moves](const std::vector<u64> &moves) -> void {
-                    vector_moves.push_back(moves);
-                }
-        );
-        return vector_moves;
-    }
-
-    template<typename cube, u64 base_size>
-    cube moves_to_cube(const std::array<cube, base_size> &base, const std::vector<u64> &moves) {
-        cube c = cube::i();
-        for (u64 m: moves) {
-            c = c * base[m];
-        }
-        return c;
-    }
-
-    template<u64 base_size>
-    std::string moves_to_string(const std::array<std::string, base_size> &base_name, const std::vector<u64> &moves) {
-        std::string s{};
-        for (u64 m: moves) {
-            s += base_name[m];
-            s += " ";
-        }
-        return s;
-    }
-
-    struct random_moves {
-        std::default_random_engine e;
-        std::uniform_int_distribution<u64> d;
-
-        random_moves(u64 base_size, u64 seed) : e(seed), d(0, base_size - 1) {
-        }
-
-        std::vector<u64> operator()(u64 size) {
-            std::vector<u64> moves{};
-            for (u64 i = 0; i < size; i++) {
-                moves.push_back(d(e));
-            }
-            return moves;
-        }
-    };
 }
 
 #endif
