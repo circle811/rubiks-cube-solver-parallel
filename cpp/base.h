@@ -2,6 +2,7 @@
 #define _BASE_H
 
 #include <array>
+#include <cassert>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -10,6 +11,7 @@
 #include <iostream>
 #include <memory>
 #include <random>
+#include <set>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -20,24 +22,12 @@ namespace cube {
     typedef uint32_t u32;
     typedef uint64_t u64;
 
-    template<typename T, u64 _size_0, u64 _size_1>
-    using array_2d = std::array<std::array<T, _size_1>, _size_0>;
+    template<typename T, u64 n0, u64 n1>
+    using array_2d = std::array<std::array<T, n1>, n0>;
 
-    template<u64 _size>
-    struct array_u8 : std::array<u8, _size> {
-        constexpr bool operator==(const array_u8 &other) const {
-            for (u64 i = 0; i < _size; i++) {
-                if ((*this)[i] != other[i]) {
-                    return false;
-                }
-            }
-            return true;
-        }
-    };
-
-    template<typename T, u64 _size>
-    constexpr u64 find(const std::array<T, _size> &a, const T &x) {
-        for (u64 i = 0; i < _size; i++) {
+    template<typename T, u64 n>
+    constexpr u64 array_find(const std::array<T, n> &a, const T &x) {
+        for (u64 i = 0; i < n; i++) {
             if (a[i] == x) {
                 return i;
             }
@@ -45,35 +35,43 @@ namespace cube {
         return u64(-1);
     }
 
-    template<typename U, u64 _size>
-    constexpr std::array<U, _size> generate_table(U (*f)(u64)) {
-        std::array<U, _size> t{};
-        for (U i = 0; i < _size; i++) {
-            t[i] = f(i);
-        }
-        return t;
-    }
-
-    template<typename U, u64 _size_0, u64 _size_1>
-    constexpr array_2d<U, _size_0, _size_1> generate_table(U (*f)(u64, u64)) {
-        array_2d<U, _size_0, _size_1> t{};
-        for (U i = 0; i < _size_0; i++) {
-            for (U j = 0; j < _size_1; j++) {
-                t[i][j] = f(i, j);
+    template<typename T, u64 n>
+    constexpr bool array_eq(const std::array<T, n> &a, const std::array<T, n> &b) {
+        for (u64 i = 0; i < n; i++) {
+            if (a[i] != b[i]) {
+                return false;
             }
         }
-        return t;
+        return true;
+    }
+
+    template<typename T, u64 n, u64 n_sub>
+    constexpr std::array<T, n_sub> array_sub(const std::array<T, n> &a, const std::array<u64, n_sub> &index) {
+        std::array<T, n_sub> b{};
+        for (u64 i = 0; i < n_sub; i++) {
+            b[i] = a[index[i]];
+        }
+        return b;
+    }
+
+    template<typename U, u64 n>
+    constexpr U array_sum(const std::array<U, n> &a) {
+        U s = 0;
+        for (u64 i = 0; i < n; i++) {
+            s += a[i];
+        }
+        return s;
     }
 
     template<typename T>
-    std::unique_ptr<T> cache_data(const std::string &name, std::function<void(T &)> init) {
+    std::unique_ptr<T> cache_data(const std::string &name, const std::function<void(T &)> &init) {
         std::string dir = "cache/";
         std::string path = dir + name;
-        T *p = reinterpret_cast<T *>(operator new(sizeof(T)));
+        std::unique_ptr<T> p = std::make_unique<T>();
         if (std::filesystem::exists(path)) {
             std::cout << "cache_data: load " << name << " ..." << std::endl;
             std::ifstream f{path, std::ios::binary};
-            f.read(reinterpret_cast<char *>(p), sizeof(T));
+            f.read(reinterpret_cast<char *>(p.get()), sizeof(T));
             std::cout << "cache_data: load " << name << " ok" << std::endl;
         } else {
             std::cout << "cache_data: compute " << name << " ..." << std::endl;
@@ -85,10 +83,10 @@ namespace cube {
             std::cout << "cache_data: save " << name << " ..." << std::endl;
             std::filesystem::create_directory(dir);
             std::ofstream f{path, std::ios::binary};
-            f.write(reinterpret_cast<const char *>(p), sizeof(T));
+            f.write(reinterpret_cast<const char *>(p.get()), sizeof(T));
             std::cout << "cache_data: save " << name << " ok" << std::endl;
         }
-        return std::unique_ptr<T>(p);
+        return p;
     }
 }
 
