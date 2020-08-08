@@ -14,138 +14,146 @@
 //  6    4
 
 namespace cube::_2 {
-    constexpr u64 n_cp = number_p<7>();
-    constexpr u64 n_co = number_o<7, 3>();
-
-    struct cube2a {
+    struct cube2 {
         array_u8<7> cp;
         array_u8<7> co;
 
-        static constexpr cube2a i() {
-            return cube2a{i_p<7>(), i_o<7, 3>()};
+        static constexpr cube2 i() {
+            return cube2{
+                    array_u8<7>::i(),
+                    i_o<7, 3>()
+            };
         }
 
-        constexpr cube2a inv() const {
-            const po<7, 3> &r = inv_po<7, 3>(cp, co);
-            return cube2a{std::get<0>(r), std::get<1>(r)};
+        constexpr cube2 inv() const {
+            array_u8<7> cp_inv = cp.inv();
+            return cube2{
+                    cp_inv,
+                    inv_o<7, 3>(co) * cp_inv
+            };
         }
 
-        constexpr cube2a operator*(const cube2a &other) const {
-            const po<7, 3> &r = mul_po<7, 3>(cp, co, other.cp, other.co);
-            return cube2a{std::get<0>(r), std::get<1>(r)};
+        constexpr cube2 operator*(const cube2 &other) const {
+            return cube2{
+                    cp * other.cp,
+                    mul_o<7, 3>(co * other.cp, other.co)
+            };
         }
 
-        constexpr bool operator==(const cube2a &other) const {
-            return (cp == other.cp) and (co == other.co);
+        constexpr bool operator==(const cube2 &other) const {
+            return cp == other.cp and co == other.co;
+        }
+
+        std::string to_string() const {
+            return "cube2(" + cp.to_string() + " " + co.to_string() + ")";
         }
     };
 
-    struct cube2b {
-        u16 cp;
-        u16 co;
+    constexpr cube2 U1{{1, 3, 0, 2, 4, 5, 6},
+                       {0, 0, 0, 0, 0, 0, 0}};
+    constexpr cube2 R1{{4, 0, 2, 3, 5, 1, 6},
+                       {2, 1, 0, 0, 1, 2, 0}};
+    constexpr cube2 F1{{2, 1, 6, 3, 0, 5, 4},
+                       {1, 0, 2, 0, 2, 0, 1}};
+    constexpr cube2 U2 = U1 * U1;
+    constexpr cube2 R2 = R1 * R1;
+    constexpr cube2 F2 = F1 * F1;
+    constexpr cube2 U3 = U1.inv();
+    constexpr cube2 R3 = R1.inv();
+    constexpr cube2 F3 = F1.inv();
 
-        constexpr bool operator==(const cube2b &other) const {
-            return (cp == other.cp) and (co == other.co);
-        }
+    constexpr u64 n_cube2_base = 9;
+
+    constexpr std::array<cube2, n_cube2_base> cube2_base{
+            U1, U2, U3,
+            R1, R2, R3,
+            F1, F2, F3
     };
 
-    constexpr cube2b cube2a_to_b(const cube2a &a) {
-        return cube2b{u16(p_to_int<7>(a.cp)), u16(o_to_int<7, 3>(a.co))};
-    }
-
-    constexpr cube2a cube2b_to_a(const cube2b &b) {
-        return cube2a{int_to_p<7>(b.cp), int_to_o<7, 3>(b.co)};
-    }
-
-    constexpr u64 cube2b_to_int(const cube2b &b) {
-        return b.cp * n_co + b.co;
-    }
-
-    constexpr cube2b int_to_cube2b(u64 x) {
-        return cube2b{u16(x / n_co), u16(x % n_co)};
-    }
-
-    constexpr cube2a U1{{1, 3, 0, 2, 4, 5, 6},
-                        {0, 0, 0, 0, 0, 0, 0}};
-    constexpr cube2a R1{{4, 0, 2, 3, 5, 1, 6},
-                        {2, 1, 0, 0, 1, 2, 0}};
-    constexpr cube2a F1{{2, 1, 6, 3, 0, 5, 4},
-                        {1, 0, 2, 0, 2, 0, 1}};
-    constexpr cube2a U2 = U1 * U1;
-    constexpr cube2a R2 = R1 * R1;
-    constexpr cube2a F2 = F1 * F1;
-    constexpr cube2a U3 = U1.inv();
-    constexpr cube2a R3 = R1.inv();
-    constexpr cube2a F3 = F1.inv();
-
-    constexpr std::array<cube2a, 9> cube2_base{
-            U1, U2, U3, R1, R2, R3, F1, F2, F3
-    };
-
-    const std::array<std::string, cube2_base.size()> cube2_base_name{
-            "U", "U2", "U'", "R", "R2", "R'", "F", "F2", "F'"
+    constexpr std::array<const char *, n_cube2_base> cube2_base_name{
+            "U", "U2", "U'",
+            "R", "R2", "R'",
+            "F", "F2", "F'"
     };
 
     struct cube2_solver {
-        typedef cube2b v_type;
+        typedef cube2 t_cube;
+        typedef u64 t_state;
+        typedef u64 t_hint;
 
-        static constexpr u64 size = n_co * n_cp;
+        static constexpr u64 n_cp = number_p<7>();
+        static constexpr u64 n_co = number_o<7, 3>();
+        static constexpr u64 n_state = n_cp * n_co;
+        static constexpr u64 n_base = n_cube2_base;
 
-        static constexpr u64 base_size = cube2_base.size();
+        static constexpr std::array<t_cube, n_base> base = cube2_base;
+        static constexpr std::array<const char *, n_base> base_name = cube2_base_name;
 
-        static constexpr v_type start = cube2a_to_b(cube2a::i());
-
-        static constexpr u64 v_to_int(const v_type &a) {
-            return cube2b_to_int(a);
+        static constexpr t_state cube_to_state(const t_cube &a) {
+            return p_to_int<7>(a.cp) * n_co + o_to_int<7, 3>(a.co);
         }
 
-        static constexpr v_type int_to_v(u64 x) {
-            return int_to_cube2b(x);
+        static constexpr u64 state_to_int(const t_state &a) {
+            return a;
         }
 
-        std::unique_ptr<array_2d < u16, n_cp, base_size>> table_mul_cp;
+        static constexpr t_state int_to_state(u64 x) {
+            return x;
+        }
 
-        std::unique_ptr<array_2d < u16, n_co, base_size>> table_mul_co;
+        static constexpr bool is_start(const t_state &a) {
+            constexpr t_state _start = cube_to_state(t_cube::i());
+            return a == _start;
+        }
 
-        std::unique_ptr<array_u2 < size>> table_dist_m3;
+        static constexpr std::array<u64, 1> alt(const t_state &a, u64 i) {
+            return std::array<u64, 1>{i};
+        }
+
+        std::unique_ptr<array_2d < u16, n_cp, n_base>> mul_cp;
+        std::unique_ptr<array_2d < u16, n_co, n_base>> mul_co;
+        std::unique_ptr<array_u2 < n_state>> distance_m3;
 
         cube2_solver() {
-            table_mul_cp = cache_data<array_2d<u16, n_cp, base_size>>(
-                    "cube2.table_mul_cp",
-                    [](array_2d<u16, n_cp, base_size> &t) -> void {
+            mul_cp = cache_data<array_2d<u16, n_cp, n_base>>(
+                    "cube2.mul_cp",
+                    [](array_2d<u16, n_cp, n_base> &t) -> void {
                         for (u64 i = 0; i < n_cp; i++) {
-                            const cube2a &a = cube2b_to_a(cube2b{u16(i), 0});
-                            for (u64 j = 0; j < base_size; j++) {
-                                t[i][j] = cube2a_to_b(a * cube2_base[j]).cp;
+                            array_u8<7> cp = int_to_p<7>(i);
+                            for (u64 j = 0; j < n_base; j++) {
+                                t[i][j] = u16(p_to_int<7>(cp * base[j].cp));
                             }
                         }
                     }
             );
-            table_mul_co = cache_data<array_2d<u16, n_co, base_size>>(
-                    "cube2.table_mul_co",
-                    [](array_2d<u16, n_co, base_size> &t) -> void {
+            mul_co = cache_data<array_2d<u16, n_co, n_base>>(
+                    "cube2.mul_co",
+                    [](array_2d<u16, n_co, n_base> &t) -> void {
                         for (u64 i = 0; i < n_co; i++) {
-                            const cube2a &a = cube2b_to_a(cube2b{0, u16(i)});
-                            for (u64 j = 0; j < base_size; j++) {
-                                t[i][j] = cube2a_to_b(a * cube2_base[j]).co;
+                            array_u8<7> co = int_to_o<7, 3>(i);
+                            for (u64 j = 0; j < n_base; j++) {
+                                mul_o<7, 3>(co * base[j].cp, base[j].co);
+                                t[i][j] = u16(o_to_int<7, 3>(mul_o<7, 3>(co * base[j].cp, base[j].co)));
                             }
                         }
                     }
             );
-            table_dist_m3 = cache_data<array_u2<size>>(
-                    "cube2.table_dist_m3",
-                    [this](array_u2<size> &t) {
-                        bfs_m3<cube2_solver>(*this, t);
+            distance_m3 = cache_data<array_u2<n_state>>(
+                    "cube2.distance_m3",
+                    [this](array_u2<n_state> &t) -> void {
+                        bfs<cube2_solver>(*this, t);
                     }
             );
         }
 
-        std::array<v_type, base_size> adj(const v_type &a) const {
-            std::array<v_type, base_size> bs{};
-            for (u64 i = 0; i < base_size; i++) {
-                bs[i] = v_type{(*table_mul_cp)[a.cp][i], (*table_mul_co)[a.co][i]};
+        std::array<t_state, n_base> adj(const t_state &a) const {
+            const std::array<u16, n_base> &a_cp = (*mul_cp)[a / n_co];
+            const std::array<u16, n_base> &a_co = (*mul_co)[a % n_co];
+            std::array<t_state, n_base> a_s{};
+            for (u64 i = 0; i < n_base; i++) {
+                a_s[i] = a_cp[i] * n_co + a_co[i];
             }
-            return bs;
+            return a_s;
         }
     };
 }
