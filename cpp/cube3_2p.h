@@ -55,11 +55,12 @@ namespace cube::_3::_2p {
             return std::array<u64, 1>{i};
         }
 
+        u64 n_thread;
         std::unique_ptr<array_2d < u16, n_co, n_base>> mul_co;
         std::unique_ptr<array_2d < u32, n_egp * n_eo, n_base>> mul_egp_eo;
         std::unique_ptr<array_u2 < n_state>> distance_m3;
 
-        p0_solver() {
+        explicit p0_solver(u64 _n_thread) : n_thread(_n_thread) {
             mul_co = cache_data<array_2d<u16, n_co, n_base>>(
                     "cube3.p0.mul_co",
                     [](array_2d<u16, n_co, n_base> &t) -> void {
@@ -90,7 +91,7 @@ namespace cube::_3::_2p {
             distance_m3 = cache_data<array_u2<n_state>>(
                     "cube3.p0.distance_m3",
                     [this](array_u2<n_state> &t) -> void {
-                        bfs<p0_solver>(*this, t);
+                        bfs<p0_solver>(*this, t, n_thread);
                     }
             );
         }
@@ -132,13 +133,14 @@ namespace cube::_3::_2p {
         static constexpr array_2d <u8, n_base, n_s16> conj_base = generate_table_conj<cube3, n_base, n_s16>(
                 base, elements_s16);
 
+        u64 n_thread;
         std::unique_ptr<array_2d < u16, n_co, n_s16>> conj_co;
         std::unique_ptr<array_2d < u16, n_co, n_base>> mul_co;
         std::unique_ptr<table_conj_mul < u32, U_SC, u16, n_egp * n_eo, n_sc_egp_eo, n_s16, n_base>> conj_mul_egp_eo;
         std::unique_ptr<array_u2 < n_state>> distance_m3;
         t_state _start;
 
-        g_p0s_solver() {
+        explicit g_p0s_solver(u64 _n_thread) : n_thread(_n_thread) {
             conj_co = cache_data<array_2d<u16, n_co, n_s16>>(
                     std::string("cube3.") + name + ".conj_co",
                     [](array_2d<u16, n_co, n_s16> &t) -> void {
@@ -195,7 +197,7 @@ namespace cube::_3::_2p {
             distance_m3 = cache_data<array_u2<n_state>>(
                     std::string("cube3.") + name + ".distance_m3",
                     [this](array_u2<n_state> &t) -> void {
-                        bfs<g_p0s_solver<_os_e, U_SC, _n_sc_egp_eo, name>>(*this, t);
+                        bfs<g_p0s_solver<_os_e, U_SC, _n_sc_egp_eo, name>>(*this, t, n_thread);
                     }
             );
             _start = cube_to_state(t_cube::i());
@@ -311,11 +313,12 @@ namespace cube::_3::_2p {
             return std::array<u64, 1>{i};
         }
 
+        u64 n_thread;
         std::unique_ptr<array_2d < u16, n_cgp, n_base>> mul_cgp;
         std::unique_ptr<array_2d < u32, n_ep4 * n_ep8, n_base>> mul_ep4_ep8;
         std::unique_ptr<array_u2 < n_state>> distance_m3;
 
-        p1_solver() {
+        explicit p1_solver(u64 _n_thread) : n_thread(_n_thread) {
             mul_cgp = cache_data<array_2d<u16, n_cgp, n_base>>(
                     "cube3.p1.mul_cgp",
                     [](array_2d<u16, n_cgp, n_base> &t) -> void {
@@ -346,7 +349,7 @@ namespace cube::_3::_2p {
             distance_m3 = cache_data<array_u2<n_state>>(
                     "cube3.p1.distance_m3",
                     [this](array_u2<n_state> &t) -> void {
-                        bfs<p1_solver>(*this, t);
+                        bfs<p1_solver>(*this, t, n_thread);
                     }
             );
         }
@@ -392,6 +395,7 @@ namespace cube::_3::_2p {
         static constexpr array_2d <u8, n_base, n_s16> conj_base = generate_table_conj<cube3, n_base, n_s16>(
                 base, elements_s16);
 
+        u64 n_thread;
         std::unique_ptr<array_2d < u16, n_cp, n_s16>> conj_cp;
         std::unique_ptr<array_2d < u16, n_cp, n_base>> mul_cp;
         std::unique_ptr<table_conj_mul < u32, u16, u16, n_ep4 * n_ep8, n_sc_ep4_ep8, n_s16, n_base>> conj_mul_ep4_ep8;
@@ -400,7 +404,7 @@ namespace cube::_3::_2p {
         std::unique_ptr<array_u2 < n_state>> distance_m3;
         t_state _start;
 
-        p1s_solver() {
+        explicit p1s_solver(u64 _n_thread) : n_thread(_n_thread) {
             conj_cp = cache_data<array_2d<u16, n_cp, n_s16>>(
                     "cube3.p1s.conj_cp",
                     [](array_2d<u16, n_cp, n_s16> &t) -> void {
@@ -473,7 +477,7 @@ namespace cube::_3::_2p {
             distance_m3 = cache_data<array_u2<n_state>>(
                     "cube3.p1s.distance_m3",
                     [this](array_u2<n_state> &t) -> void {
-                        bfs<p1s_solver>(*this, t);
+                        bfs<p1s_solver>(*this, t, n_thread);
                     }
             );
             _start = cube_to_state(t_cube::i());
