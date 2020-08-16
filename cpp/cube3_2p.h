@@ -31,6 +31,7 @@ namespace cube::_3::_2p {
 
         static constexpr std::array<t_cube, n_base> base = cube3_base;
         static constexpr std::array<const char *, n_base> base_name = cube3_base_name;
+        static constexpr std::array<u64, n_base> base_mask = generate_table_mask<t_cube, n_base>(base, t_cube::i());
 
         static constexpr t_state cube_to_state(const t_cube &a) {
             return o_to_int<8, 3>(a.co) * (n_egp * n_eo)
@@ -129,6 +130,7 @@ namespace cube::_3::_2p {
 
         static constexpr std::array<t_cube, n_base> base = cube3_base;
         static constexpr std::array<const char *, n_base> base_name = cube3_base_name;
+        static constexpr std::array<u64, n_base> base_mask = generate_table_mask<t_cube, n_base>(base, t_cube::i());
 
         static constexpr array_2d <u8, n_base, n_s16> conj_base = generate_table_conj<cube3, n_base, n_s16>(
                 base, elements_s16);
@@ -287,6 +289,7 @@ namespace cube::_3::_2p {
                 cube3_base, base_index);
         static constexpr std::array<const char *, n_base> base_name = array_sub<const char *, n_cube3_base, n_base>(
                 cube3_base_name, base_index);
+        static constexpr std::array<u64, n_base> base_mask = generate_table_mask<t_cube, n_base>(base, t_cube::i());
 
         static constexpr t_state cube_to_state(const t_cube &a) {
             array_u8<8> cgp = p_to_gp<os_1x6_2>(a.cp);
@@ -391,6 +394,7 @@ namespace cube::_3::_2p {
                 cube3_base, base_index);
         static constexpr std::array<const char *, n_base> base_name = array_sub<const char *, n_cube3_base, n_base>(
                 cube3_base_name, base_index);
+        static constexpr std::array<u64, n_base> base_mask = generate_table_mask<t_cube, n_base>(base, t_cube::i());
 
         static constexpr array_2d <u8, n_base, n_s16> conj_base = generate_table_conj<cube3, n_base, n_s16>(
                 base, elements_s16);

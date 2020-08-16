@@ -24,6 +24,23 @@ namespace cube {
         return t;
     }
 
+    template<typename G, u64 n>
+    constexpr std::array<u64, n> generate_table_mask(const std::array<G, n> &elements, const G &identity) {
+        std::array<u64, n> t{};
+        for (u64 i = 0; i < n; i++) {
+            for (u64 j = i + 1; j < n; j++) {
+                G a = elements[i] * elements[j];
+                if (array_find<G, n>(elements, a) == u64(-1) and not(a == identity)) {
+                    t[i] = t[i] | (u64(1) << j);
+                    if (not(a == elements[j] * elements[i])) {
+                        t[j] = t[j] | (u64(1) << i);
+                    }
+                }
+            }
+        }
+        return t;
+    }
+
     template<typename G, u64 n, u64 n_sym>
     constexpr array_2d <u8, n, n_sym> generate_table_conj(
             const std::array<G, n> &elements, const std::array<G, n_sym> &elements_sym) {
