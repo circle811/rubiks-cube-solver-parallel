@@ -157,6 +157,11 @@ namespace cube::_2 {
             }
             return a_s;
         }
+
+        template<u64 capacity>
+        ida_star <cube2_solver, capacity> solve(const t_cube &a, u64 max_n_moves = capacity) const {
+            return ida_star<cube2_solver, capacity>(*this, a, max_n_moves);
+        }
     };
 }
 

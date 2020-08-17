@@ -106,6 +106,11 @@ namespace cube::_3::_2p {
             }
             return a_s;
         }
+
+        template<u64 capacity>
+        ida_star <p0_solver, capacity> solve(const t_cube &a, u64 max_n_moves = capacity) const {
+            return ida_star<p0_solver, capacity>(*this, a, max_n_moves);
+        }
     };
 
     // phase 0 symmetry
@@ -265,6 +270,12 @@ namespace cube::_3::_2p {
             }
             return a_i;
         }
+
+        template<u64 capacity>
+        ida_star <g_p0s_solver<_os_e, U_SC, _n_sc_egp_eo, name>, capacity> solve(
+                const t_cube &a, u64 max_n_moves = capacity) const {
+            return ida_star<g_p0s_solver<_os_e, U_SC, _n_sc_egp_eo, name>, capacity>(*this, a, max_n_moves);
+        }
     };
 
     constexpr char _p0s[] = "p0s";
@@ -365,6 +376,11 @@ namespace cube::_3::_2p {
                 a_s[i] = a_cgp[i] * (n_ep4 * n_ep8) + a_ep4_ep8[i];
             }
             return a_s;
+        }
+
+        template<u64 capacity>
+        ida_star <p1_solver, capacity> solve(const t_cube &a, u64 max_n_moves = capacity) const {
+            return ida_star<p1_solver, capacity>(*this, a, max_n_moves);
         }
     };
 
@@ -550,6 +566,11 @@ namespace cube::_3::_2p {
                 }
             }
             return a_i;
+        }
+
+        template<u64 capacity>
+        ida_star <p1s_solver, capacity> solve(const t_cube &a, u64 max_n_moves = capacity) const {
+            return ida_star<p1s_solver, capacity>(*this, a, max_n_moves);
         }
     };
 }

@@ -217,6 +217,11 @@ namespace cube::_3::e12 {
             }
             return a_i;
         }
+
+        template<u64 capacity>
+        ida_star <e12s_solver, capacity> solve(const t_cube &a, u64 max_n_moves = capacity) const {
+            return ida_star<e12s_solver, capacity>(*this, a, max_n_moves);
+        }
     };
 }
 

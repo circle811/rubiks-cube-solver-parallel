@@ -99,6 +99,11 @@ namespace cube::_3::opt {
             }
             return a_s;
         }
+
+        template<u64 capacity>
+        ida_star <c8_solver, capacity> solve(const t_cube &a, u64 max_n_moves = capacity) const {
+            return ida_star<c8_solver, capacity>(*this, a, max_n_moves);
+        }
     };
 
     struct opt_solver {
@@ -158,6 +163,11 @@ namespace cube::_3::opt {
                 a_s[i].c8 = adj_c[i];
             }
             return a_s;
+        }
+
+        template<u64 capacity>
+        ida_star <opt_solver, capacity> solve(const t_cube &a, u64 max_n_moves = capacity) const {
+            return ida_star<opt_solver, capacity>(*this, a, max_n_moves);
         }
     };
 }
