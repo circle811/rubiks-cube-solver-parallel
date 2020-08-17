@@ -403,6 +403,139 @@ namespace cube {
             }
         }
     };
+
+    template<typename _solver0, typename _solver1, u64 capacity>
+    struct combine_search {
+        typedef decltype(_solver0(1).template solve<capacity>(_solver0::t_cube::i())) t_iter0;
+        typedef decltype(_solver1(1).template solve<capacity>(_solver1::t_cube::i())) t_iter1;
+
+        static constexpr t_moves<capacity>
+        combine_moves(const t_moves<capacity> &moves0, const t_moves<capacity> &moves1) {
+            t_moves<capacity> moves{
+                    u8(moves0.n + moves1.n),
+                    moves0.a
+            };
+            for (u64 i = 0; i < moves0.n; i++) {
+                moves.a[i] = u8(_solver0::base_index[moves0.a[i]]);
+            }
+            for (u64 i = 0; i < moves1.n; i++) {
+                moves.a[moves0.n + i] = u8(_solver1::base_index[moves1.a[i]]);
+            }
+            return moves;
+        }
+
+        const _solver0 &s0;
+        const _solver1 &s1;
+        const typename _solver0::t_cube a;
+        const u64 max_n_moves;
+        u64 last_n_moves;
+        u64 optimum_n_moves;
+        bool end;
+        t_iter0 it0;
+        u64 count;
+        double total_time;
+        bool verbose;
+
+        combine_search(const _solver0 &_s0, const _solver1 &_s1, const typename _solver0::t_cube &_a,
+                       u64 _max_n_moves) :
+                s0(_s0), s1(_s1), a(_a), max_n_moves(std::min(_max_n_moves, capacity)),
+                it0(_s0.template solve<capacity>(_a, max_n_moves)) {
+            it0.verbose = false;
+            last_n_moves = u64(-1);
+            optimum_n_moves = u64(-1);
+            end = false;
+            count = 0;
+            total_time = 0.0;
+            verbose = true;
+        }
+
+        std::tuple<u64, t_moves<capacity>> operator()() {
+            auto t0 = std::chrono::steady_clock::now();
+            while (true) {
+                if (end) {
+                    if (verbose) {
+                        std::cout << "combine_search: end" << std::endl;
+                    }
+                    return {flag::end, t_moves<capacity>{u8(0), {}}};
+                }
+                auto[f0, moves0] = it0();
+                if (f0 & flag::solution) {
+                    count++;
+                    typename _solver0::t_cube b = a * moves_to_cube<_solver0>(moves0);
+                    t_iter1 it1 = s1.template solve<capacity>(b, std::min(max_n_moves, last_n_moves) - moves0.n);
+                    it1.verbose = false;
+                    auto[f1, moves1] = it1();
+                    while (not(f1 & flag::optimum) and not(f1 & flag::end)) {
+                        std::tie(f1, moves1) = it1();
+                    }
+                    if ((f1 & flag::optimum) and (moves1.n == 0 or last_n_moves > moves0.n + moves1.n)) {
+                        auto t1 = std::chrono::steady_clock::now();
+                        std::chrono::duration<double> d = t1 - t0;
+                        t0 = t1;
+                        total_time += d.count();
+                        if (verbose) {
+                            std::cout << "combine_search: found, n_moves=(" << u64(moves0.n) << " " << u64(moves1.n)
+                                      << "), count=" << count
+                                      << ", total_time=" << total_time << "s" << std::endl;
+                        }
+                        if (moves1.n == 0) {
+                            last_n_moves = moves0.n;
+                            optimum_n_moves = moves0.n;
+                            end = true;
+                        } else {
+                            last_n_moves = moves0.n + moves1.n;
+                        }
+                        u64 f = last_n_moves == optimum_n_moves ? flag::solution | flag::optimum : flag::solution;
+                        return {f, combine_moves(moves0, moves1)};
+                    }
+                } else if (f0 & flag::end) {
+                    auto t1 = std::chrono::steady_clock::now();
+                    std::chrono::duration<double> d = t1 - t0;
+                    t0 = t1;
+                    total_time += d.count();
+                    if (verbose) {
+                        std::cout << "combine_search: complete, count=" << count
+                                  << ", total_time=" << total_time << "s" << std::endl;
+                    }
+                    end = true;
+                }
+            }
+        }
+    };
+
+    template<typename _solver0, typename _solver1>
+    struct combine_solver {
+        typedef typename _solver0::t_cube t_cube;
+
+        static constexpr u64 n_super_base = _solver0::n_super_base;
+        static constexpr u64 n_base = _solver0::n_super_base;
+
+        static constexpr std::array<t_cube, n_super_base> super_base = _solver0::super_base;
+        static constexpr std::array<const char *, n_super_base> super_base_name = _solver0::super_base_name;
+        static constexpr std::array<u64, n_base> base_index = []() -> std::array<u64, n_base> {
+            std::array<u64, n_base> _base_index{};
+            for (u64 i = 0; i < n_base; i++) {
+                _base_index[i] = i;
+            }
+            return _base_index;
+        }();
+        static constexpr std::array<t_cube, n_base> base = array_sub<t_cube, n_super_base, n_base>(
+                super_base, base_index);
+        static constexpr std::array<const char *, n_base> base_name = array_sub<const char *, n_super_base, n_base>(
+                super_base_name, base_index);
+
+        u64 n_thread;
+        _solver0 s0;
+        _solver1 s1;
+
+        explicit combine_solver(u64 _n_thread) : n_thread(_n_thread), s0(_n_thread), s1(_n_thread) {
+        }
+
+        template<u64 capacity>
+        combine_search<_solver0, _solver1, capacity> solve(const t_cube &a, u64 max_n_moves = capacity) const {
+            return combine_search<_solver0, _solver1, capacity>(s0, s1, a, max_n_moves);
+        }
+    };
 }
 
 #endif
