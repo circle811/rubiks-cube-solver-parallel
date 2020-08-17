@@ -66,6 +66,30 @@ namespace cube {
     }
 
     template<typename T>
+    std::string vector_to_string(const std::vector<T> &a) {
+        std::string s = "(";
+        u64 n = a.size();
+        for (u64 i = 0; i < n; i++) {
+            s += std::to_string(a[i]);
+            if (i < n - 1) {
+                s += " ";
+            }
+        }
+        s += ")";
+        return s;
+    }
+
+    template<typename U>
+    constexpr U vector_sum(const std::vector<U> &a) {
+        U s = 0;
+        u64 n = a.size();
+        for (u64 i = 0; i < n; i++) {
+            s += a[i];
+        }
+        return s;
+    }
+
+    template<typename T>
     std::unique_ptr<T> cache_data(const std::string &name, const std::function<void(T &)> &init) {
         std::string dir = "cache/";
         std::string path = dir + name;

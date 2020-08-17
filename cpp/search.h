@@ -224,6 +224,185 @@ namespace cube {
         u64 d = computer_distance(s.distance_m3->get(s.state_to_int(a)), hint);
         return {d, d};
     }
+
+    template<u64 capacity>
+    struct t_moves {
+        u8 n;
+        std::array<u8, capacity> a;
+    };
+
+    template<u64 capacity>
+    struct random_moves {
+        std::default_random_engine e;
+        std::uniform_int_distribution<u8> d;
+
+        random_moves(u64 n_base, u64 seed) : e(seed), d(0, n_base - 1) {
+        }
+
+        t_moves<capacity> operator()(u64 n) {
+            assert(n <= capacity);
+            t_moves<capacity> moves{u8(n), {}};
+            for (u64 i = 0; i < n; i++) {
+                moves.a[i] = d(e);
+            }
+            return moves;
+        }
+    };
+
+    template<typename _solver, u64 capacity>
+    typename _solver::t_cube moves_to_cube(const t_moves<capacity> &moves) {
+        typename _solver::t_cube a = _solver::t_cube::i();
+        u64 n = moves.n;
+        for (u64 i = 0; i < n; i++) {
+            a = a * _solver::base[moves.a[i]];
+        }
+        return a;
+    }
+
+    template<typename _solver, u64 capacity>
+    std::string moves_to_string(const t_moves<capacity> &moves) {
+        std::string s = "(";
+        u64 n = moves.n;
+        for (u64 i = 0; i < n; i++) {
+            s += _solver::base_name[moves.a[i]];
+            if (i < n - 1) {
+                s += " ";
+            }
+        }
+        s += ")";
+        return s;
+    }
+
+    struct flag {
+        static constexpr u64 none = 0;
+        static constexpr u64 solution = 1;
+        static constexpr u64 optimum = 2;
+        static constexpr u64 end = 4;
+    };
+
+    template<typename _solver, u64 capacity>
+    struct ida_star_node {
+        typename _solver::t_state state;
+        typename _solver::t_hint hint;
+        t_moves<capacity> moves;
+    };
+
+    template<typename _solver, u64 capacity>
+    struct ida_star {
+        typedef ida_star_node<_solver, capacity> node;
+
+        const _solver &s;
+        const typename _solver::t_cube a;
+        const u64 max_n_moves;
+        u64 n_moves;
+        u64 optimum_n_moves;
+        bool end;
+        node node_a;
+        std::vector<node> stack;
+        std::vector<u64> count;
+        double layer_time;
+        double total_time;
+        bool verbose;
+
+        ida_star(const _solver &_s, const typename _solver::t_cube &_a, u64 _max_n_moves) :
+                s(_s), a(_a), max_n_moves(std::min(_max_n_moves, capacity)) {
+            typename _solver::t_state state_a = s.cube_to_state(_a);
+            auto[dist_a, hint_a] = get_distance<_solver>(s, state_a);
+            n_moves = std::min(dist_a, max_n_moves);
+            optimum_n_moves = u64(-1);;
+            end = false;
+            node_a = node{
+                    state_a,
+                    hint_a,
+                    t_moves<capacity>{u8(0), {}}
+            };
+            stack.push_back(node_a);
+            count = std::vector<u64>(n_moves + 1, 0);
+            layer_time = 0.0;
+            total_time = 0.0;
+            verbose = true;
+        }
+
+        std::tuple<u64, t_moves<capacity>> operator()() {
+            auto t0 = std::chrono::steady_clock::now();
+            while (true) {
+                if (end) {
+                    if (verbose) {
+                        std::cout << "ida_star: end" << std::endl;
+                    }
+                    return {flag::end, t_moves<capacity>{u8(0), {}}};
+                }
+                if (stack.empty()) {
+                    auto t1 = std::chrono::steady_clock::now();
+                    std::chrono::duration<double> d = t1 - t0;
+                    t0 = t1;
+                    layer_time += d.count();
+                    total_time += d.count();
+                    if (verbose) {
+                        std::cout << "ida_star: complete, n_moves=" << n_moves
+                                  << ", total_count=" << vector_sum<u64>(count)
+                                  << ", layer_time=" << layer_time
+                                  << "s, total_time=" << total_time << "s" << std::endl;
+                        std::cout << "count=" << vector_to_string<u64>(count) << std::endl;
+                    }
+                    if (n_moves == max_n_moves) {
+                        end = true;
+                    } else {
+                        n_moves++;
+                        stack.push_back(node_a);
+                        count = std::vector<u64>(n_moves + 1, 0);
+                        layer_time = 0.0;
+                        if (optimum_n_moves != u64(-1)) {
+                            return {flag::none, t_moves<capacity>{u8(0), {}}};
+                        }
+                    }
+                } else {
+                    node b = stack.back();
+                    stack.pop_back();
+                    count[b.moves.n]++;
+                    if (b.moves.n == n_moves) {
+                        if (s.is_start(b.state)) {
+                            auto t1 = std::chrono::steady_clock::now();
+                            std::chrono::duration<double> d = t1 - t0;
+                            t0 = t1;
+                            layer_time += d.count();
+                            total_time += d.count();
+                            if (verbose) {
+                                std::cout << "ida_star: found, n_moves=" << n_moves
+                                          << ", total_count=" << vector_sum<u64>(count)
+                                          << ", layer_time=" << layer_time
+                                          << "s, total_time=" << total_time << "s" << std::endl;
+                                std::cout << "count=" << vector_to_string<u64>(count) << std::endl;
+                            }
+                            if (optimum_n_moves == u64(-1)) {
+                                optimum_n_moves = b.moves.n;
+                            }
+                            u64 f = b.moves.n == optimum_n_moves ? flag::solution | flag::optimum : flag::solution;
+                            return {f, b.moves};
+                        }
+                    } else {
+                        u64 mask = b.moves.n == 0 ? u64(-1) : _solver::base_mask[b.moves.a[b.moves.n - 1]];
+                        std::array<typename _solver::t_state, _solver::n_base> adj_b = s.adj(b.state);
+                        for (u64 i = _solver::n_base - 1; i < _solver::n_base; i--) {
+                            if ((mask >> i) & u64(1)) {
+                                typename _solver::t_state state_c = adj_b[i];
+                                auto[dist_c, hint_c] = get_distance_hint<_solver>(s, state_c, b.hint);
+                                if (b.moves.n + 1 + dist_c <= n_moves) {
+                                    node c{
+                                            state_c,
+                                            hint_c,
+                                            t_moves<capacity>{u8(b.moves.n + 1), b.moves.a}
+                                    };
+                                    c.moves.a[b.moves.n] = i;
+                                    stack.push_back(c);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
 }
 
 #endif
