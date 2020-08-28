@@ -88,7 +88,8 @@ namespace cube::_2 {
 
         static constexpr std::array<t_cube, n_base> base = cube2_base;
         static constexpr std::array<const char *, n_base> base_name = cube2_base_name;
-        static constexpr std::array<u64, n_base> base_mask = generate_table_mask<t_cube, n_base>(base, t_cube::i());
+        static constexpr std::array<u64, n_base> base_mask =
+                generate_table_base_mask<t_cube, n_base>(base, t_cube::i());
 
         static constexpr t_state cube_to_state(const t_cube &a) {
             return p_to_int<7>(a.cp) * n_co + o_to_int<7, 3>(a.co);

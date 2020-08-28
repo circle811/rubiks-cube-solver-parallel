@@ -82,10 +82,11 @@ namespace cube::_3::e12 {
 
         static constexpr std::array<t_cube, n_base> base = cube3_base;
         static constexpr std::array<const char *, n_base> base_name = cube3_base_name;
-        static constexpr std::array<u64, n_base> base_mask = generate_table_mask<t_cube, n_base>(base, t_cube::i());
+        static constexpr std::array<u64, n_base> base_mask =
+                generate_table_base_mask<t_cube, n_base>(base, t_cube::i());
 
-        static constexpr array_2d <u8, n_base, n_s48> conj_base = generate_table_conj<cube3, n_base, n_s48>(
-                base, elements_s48);
+        static constexpr array_2d <u8, n_base, n_s48> conj_base =
+                generate_table_conj_base<cube3, n_base, n_s48>(base, elements_s48);
 
         u64 n_thread;
         std::unique_ptr<array_2d < u16, n_eo, n_s48>> conj_eo;

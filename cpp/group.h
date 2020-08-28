@@ -24,15 +24,15 @@ namespace cube {
         return t;
     }
 
-    template<typename G, u64 n>
-    constexpr std::array<u64, n> generate_table_mask(const std::array<G, n> &elements, const G &identity) {
-        std::array<u64, n> t{};
-        for (u64 i = 0; i < n; i++) {
-            for (u64 j = i + 1; j < n; j++) {
-                G a = elements[i] * elements[j];
-                if (array_find<G, n>(elements, a) == u64(-1) and not(a == identity)) {
+    template<typename G, u64 n_base>
+    constexpr std::array<u64, n_base> generate_table_base_mask(const std::array<G, n_base> &base, const G &identity) {
+        std::array<u64, n_base> t{};
+        for (u64 i = 0; i < n_base; i++) {
+            for (u64 j = i + 1; j < n_base; j++) {
+                G a = base[i] * base[j];
+                if (array_find<G, n_base>(base, a) == u64(-1) and not(a == identity)) {
                     t[i] = t[i] | (u64(1) << j);
-                    if (not(a == elements[j] * elements[i])) {
+                    if (not(a == base[j] * base[i])) {
                         t[j] = t[j] | (u64(1) << i);
                     }
                 }
@@ -41,13 +41,13 @@ namespace cube {
         return t;
     }
 
-    template<typename G, u64 n, u64 n_sym>
-    constexpr array_2d <u8, n, n_sym> generate_table_conj(
-            const std::array<G, n> &elements, const std::array<G, n_sym> &elements_sym) {
-        array_2d <u8, n, n_sym> t{};
-        for (u64 i = 0; i < n; i++) {
-            for (u64 j = 0; j < n_sym; j++) {
-                t[i][j] = array_find<G, n>(elements, elements_sym[j].inv() * elements[i] * elements_sym[j]);
+    template<typename G, u64 n_base, u64 n_sym>
+    constexpr array_2d <u8, n_base, n_sym> generate_table_conj_base(
+            const std::array<G, n_base> &base, const std::array<G, n_sym> &elements_sym) {
+        array_2d <u8, n_base, n_sym> t{};
+        for (u64 i = 0; i < n_base; i++) {
+            for (u64 s = 0; s < n_sym; s++) {
+                t[i][s] = array_find<G, n_base>(base, elements_sym[s].inv() * base[i] * elements_sym[s]);
             }
         }
         return t;
