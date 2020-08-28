@@ -33,6 +33,9 @@ namespace cube::_3::opt {
         static constexpr std::array<u64, n_base> base_mask =
                 generate_table_base_mask<t_cube, n_base>(base, t_cube::i());
 
+        static constexpr array_2d <u8, n_base, n_s48> conj_base =
+                generate_table_conj_base<cube3, n_base, n_s48>(base, elements_s48);
+
         static constexpr t_state cube_to_state(const t_cube &a) {
             return p_to_int<8>(a.cp) * n_co + o_to_int<8, 3>(a.co);
         }
@@ -54,12 +57,57 @@ namespace cube::_3::opt {
             return std::array<u64, 1>{i};
         }
 
+        static void init_self_sym_subgroup(
+                std::array<u8, n_state> &self_sym_subgroup, const std::vector<u64> &subgroups_s48) {
+            constexpr u64 n_sc_state = 1841970;
+            typedef table_conj_mul<u32, u32, u64, n_state, n_sc_state, n_s48, n_base> t_conj_mul;
+            std::unique_ptr<t_conj_mul> conj_mul = std::make_unique<t_conj_mul>();
+            conj_mul->init(
+                    [](u32 i) -> std::array<u32, n_s48> {
+                        cube3 a = cube3::i();
+                        a.cp = int_to_p<8>(i / n_co);
+                        a.co = int_to_o<8, 3>(i % n_co);
+                        std::array<u32, n_s48> conj_i{};
+                        for (u64 s = 0; s < n_s48; s++) {
+                            cube3 b = elements_s48[inv_s48[s]] * a * elements_s48[s];
+                            conj_i[s] = u32(p_to_int<8>(b.cp) * n_co + o_to_int<8, 3>(b.co));
+                        }
+                        return conj_i;
+                    },
+                    [](u32 i) -> std::array<u32, n_base> {
+                        return {};
+                    }
+            );
+
+            std::map<u64, std::array<u64, n_s48>> conj_subgroup_s48 =
+                    generate_table_conj_subgroup<u64, n_s48>(subgroups_s48, inv_s48, mul_s48);
+            std::map<u64, u8> subgroup_to_int{};
+            for (u64 i = 0; i < subgroups_s48.size(); i++) {
+                subgroup_to_int[subgroups_s48[i]] = i;
+            }
+            for (u64 i = 0; i < n_state; i++) {
+                auto[sym, sc] = conj_mul->g_to_sym_sc(i);
+                u64 subgroup0 = conj_mul->sc_to_ss[sc];
+                u64 subgroup1 = conj_subgroup_s48.at(subgroup0)[sym];
+                self_sym_subgroup[i] = subgroup_to_int[subgroup1];
+            }
+        }
+
         u64 n_thread;
+        std::vector<u64> subgroups_s48;
+        std::map<u64, u64> sym_mask;
+        std::unique_ptr<std::array<u8, n_state>> self_sym_subgroup;
         std::unique_ptr<array_2d < u16, n_cp, n_base>> mul_cp;
         std::unique_ptr<array_2d < u16, n_co, n_base>> mul_co;
         std::unique_ptr<array_u2 < n_state>> distance_m3;
 
         explicit c8_solver(u64 _n_thread) : n_thread(_n_thread) {
+            subgroups_s48 = generate_table_subgroups<u64, n_s48>(mul_s48);
+            sym_mask = generate_table_sym_mask<u64, n_s48, n_base>(subgroups_s48, conj_base);
+            self_sym_subgroup = cache_data<std::array<u8, n_state>>(
+                    "cube3.c8.self_sym_subgroup",
+                    std::bind(&init_self_sym_subgroup, std::placeholders::_1, std::cref(subgroups_s48))
+            );
             mul_cp = cache_data<array_2d<u16, n_cp, n_base>>(
                     "cube3.c8.mul_cp",
                     [](array_2d<u16, n_cp, n_base> &t) -> void {
@@ -99,6 +147,10 @@ namespace cube::_3::opt {
                 a_s[i] = a_cp[i] * n_co + a_co[i];
             }
             return a_s;
+        }
+
+        u64 get_self_sym_subgroup(const t_state &a) const {
+            return subgroups_s48[(*self_sym_subgroup)[a]];
         }
 
         template<u64 capacity>
