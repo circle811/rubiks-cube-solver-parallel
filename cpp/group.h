@@ -404,6 +404,81 @@ namespace cube {
         return x;
     }
 
+    template<typename U_SS, u64 n>
+    U_SS _generate_subgroup(const array_2d <u8, n, n> &mul, U_SS subset) {
+        while (true) {
+            U_SS next_subset = 0;
+            for (u64 i = 0; i < n; i++) {
+                if ((subset >> i) & U_SS(1)) {
+                    for (u64 j = 0; j < n; j++) {
+                        if ((subset >> j) & U_SS(1)) {
+                            next_subset = next_subset | (U_SS(1) << mul[i][j]);
+                        }
+                    }
+                }
+            }
+            if (subset != next_subset) {
+                subset = next_subset;
+            } else {
+                break;
+            }
+        }
+        return subset;
+    }
+
+    template<typename U_SS, u64 n>
+    std::vector<U_SS> generate_table_subgroups(const array_2d <u8, n, n> &mul) {
+        std::set<U_SS> t{1};
+        for (u64 i = 0; i < n; i++) {
+            std::set<U_SS> tt(t);
+            for (u64 subgroup: t) {
+                t.insert(_generate_subgroup<U_SS, n>(mul, subgroup | (U_SS(1) << i)));
+            }
+        }
+        return std::vector<U_SS>(t.begin(), t.end());
+    }
+
+    template<typename U_SS, u64 n>
+    std::map<U_SS, std::array<U_SS, n>> generate_table_conj_subgroup(
+            const std::vector<U_SS> &subgroups, const std::array<u8, n> &inv, const array_2d <u8, n, n> &mul) {
+        std::map<U_SS, std::array<U_SS, n>> t{};
+        for (U_SS subgroup: subgroups) {
+            for (u64 s = 0; s < n; s++) {
+                U_SS subgroup1 = 0;
+                for (u64 i = 0; i < n; i++) {
+                    if ((subgroup >> i) & U_SS(1)) {
+                        subgroup1 = subgroup1 | (U_SS(1) << mul[inv[s]][mul[i][s]]);
+                    }
+                }
+                t[subgroup][s] = subgroup1;
+            }
+        }
+        return t;
+    }
+
+    template<typename U_SS, u64 n, u64 n_base>
+    std::map<U_SS, u64> generate_table_sym_mask(
+            const std::vector<U_SS> &subgroups, const array_2d <u8, n_base, n> &conj_base) {
+        std::map<U_SS, u64> t{};
+        for (U_SS subgroup: subgroups) {
+            u64 mask = 0;
+            u64 mark = 0;
+            for (u64 i = 0; i < n_base; i++) {
+                if (not((mark >> i) & u64(1))) {
+                    mask = mask | (u64(1) << i);
+                    for (u64 s = 0; s < n; s++) {
+                        if ((subgroup >> s) & U_SS(1)) {
+                            mark = mark | (u64(1) << conj_base[i][s]);
+                        }
+                    }
+                }
+
+            }
+            t[subgroup] = mask;
+        }
+        return t;
+    }
+
     template<typename U_G, typename U_SC, typename U_SS, u64 n_g, u64 n_sc, u64 n_sym, u64 n_base>
     struct table_conj_mul {
         std::array<u8, n_g> g_to_sym;
