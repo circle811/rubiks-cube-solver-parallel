@@ -154,8 +154,9 @@ namespace cube::_3::opt {
         }
 
         template<u64 capacity>
-        ida_star <c8_solver, capacity> solve(const t_cube &a, u64 max_n_moves = capacity) const {
-            return ida_star<c8_solver, capacity>(*this, a, max_n_moves);
+        ida_star <c8_solver, capacity> solve(
+                const t_cube &a, u64 max_n_moves = capacity, u64 sym_mask_n_moves = 0) const {
+            return ida_star<c8_solver, capacity>(*this, a, max_n_moves, sym_mask_n_moves);
         }
     };
 
@@ -220,13 +221,17 @@ namespace cube::_3::opt {
         }
 
         template<u64 capacity>
-        ida_star <opt_solver, capacity> solve(const t_cube &a, u64 max_n_moves = capacity) const {
-            return ida_star<opt_solver, capacity>(*this, a, max_n_moves);
+        ida_star <opt_solver, capacity> solve(
+                const t_cube &a, u64 max_n_moves = capacity, u64 sym_mask_n_moves = 0) const {
+            return ida_star<opt_solver, capacity>(*this, a, max_n_moves, sym_mask_n_moves);
         }
     };
 }
 
 namespace cube {
+    using cube::_3::n_s48;
+    using cube::_3::elements_s48;
+    using cube::_3::inv_s48;
     using cube::_3::opt::n_s3;
     using cube::_3::opt::p0es_solver;
     using cube::_3::opt::c8_solver;
@@ -277,6 +282,37 @@ namespace cube {
         }
         return {max_d, r_hint};
     }
+
+    template<u64 capacity>
+    struct get_sym_mask<c8_solver, capacity> {
+        static u64 call(
+                const c8_solver &s, const typename c8_solver::t_cube &a, const ida_star_node <c8_solver, capacity> &b) {
+            u64 subgroup = s.get_self_sym_subgroup(b.state);
+            return s.sym_mask.at(subgroup);
+        }
+    };
+
+    template<u64 capacity>
+    struct get_sym_mask<opt_solver, capacity> {
+        static u64 call(
+                const opt_solver &s, const typename opt_solver::t_cube &a,
+                const ida_star_node <opt_solver, capacity> &b) {
+            u64 subgroup0 = s.c8_s.get_self_sym_subgroup(b.state.c8);
+            if (subgroup0 == 1) {
+                return s.c8_s.sym_mask.at(subgroup0);
+            }
+            typename opt_solver::t_cube bb = a * moves_to_cube<opt_solver, capacity>(b.moves);
+            u64 subgroup1 = 0;
+            for (u64 s = 0; s < n_s48; s++) {
+                if ((subgroup0 >> s) & u64(1)) {
+                    if (elements_s48[inv_s48[s]] * bb * elements_s48[s] == bb) {
+                        subgroup1 = subgroup1 | (u64(1) << s);
+                    }
+                }
+            }
+            return s.c8_s.sym_mask.at(subgroup1);
+        }
+    };
 }
 
 #endif

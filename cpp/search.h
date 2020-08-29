@@ -288,12 +288,21 @@ namespace cube {
     };
 
     template<typename _solver, u64 capacity>
+    struct get_sym_mask {
+        static u64 call(
+                const _solver &s, const typename _solver::t_cube &a, const ida_star_node<_solver, capacity> &b) {
+            return u64(-1);
+        }
+    };
+
+    template<typename _solver, u64 capacity>
     struct ida_star {
         typedef ida_star_node<_solver, capacity> node;
 
         const _solver &s;
         const typename _solver::t_cube a;
         const u64 max_n_moves;
+        const u64 sym_mask_n_moves;
         u64 n_moves;
         u64 optimum_n_moves;
         bool end;
@@ -304,8 +313,8 @@ namespace cube {
         double total_time;
         bool verbose;
 
-        ida_star(const _solver &_s, const typename _solver::t_cube &_a, u64 _max_n_moves) :
-                s(_s), a(_a), max_n_moves(std::min(_max_n_moves, capacity)) {
+        ida_star(const _solver &_s, const typename _solver::t_cube &_a, u64 _max_n_moves, u64 _sym_mask_n_moves = 0) :
+                s(_s), a(_a), max_n_moves(std::min(_max_n_moves, capacity)), sym_mask_n_moves(_sym_mask_n_moves) {
             typename _solver::t_state state_a = s.cube_to_state(_a);
             auto[dist_a, hint_a] = get_distance<_solver>(s, state_a);
             n_moves = std::min(dist_a, max_n_moves);
@@ -382,6 +391,9 @@ namespace cube {
                         }
                     } else {
                         u64 mask = b.moves.n == 0 ? u64(-1) : _solver::base_mask[b.moves.a[b.moves.n - 1]];
+                        if (b.moves.n < sym_mask_n_moves) {
+                            mask = mask & get_sym_mask<_solver, capacity>::call(s, a, b);
+                        }
                         std::array<typename _solver::t_state, _solver::n_base> adj_b = s.adj(b.state);
                         for (u64 i = _solver::n_base - 1; i < _solver::n_base; i--) {
                             if ((mask >> i) & u64(1)) {
