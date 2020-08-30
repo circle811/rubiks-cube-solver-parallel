@@ -548,6 +548,387 @@ namespace cube {
             return combine_search<_solver0, _solver1, capacity>(s0, s1, a, max_n_moves);
         }
     };
+
+    template<typename _solver, u64 capacity>
+    struct thread_dfs {
+        static constexpr char name[] = "thread";
+
+        typedef _solver solver;
+
+        typedef ida_star_node<_solver, capacity> node;
+
+        static void dfs_one(
+                const _solver &s, const node &a, u64 n_moves,
+                u64 &count, std::tuple<u64, t_moves<capacity>> &result, volatile bool &stop) {
+            std::array<node, _solver::n_base * capacity> stack;
+            stack[0] = a;
+            u64 stack_size = 1;
+            while (not stop and stack_size > 0) {
+                stack_size--;
+                node b = stack[stack_size];
+                count++;
+                if (b.moves.n == n_moves) {
+                    if (s.is_start(b.state)) {
+                        result = {flag::solution | flag::optimum, b.moves};
+                        stop = true;
+                        break;
+                    }
+                } else {
+                    u64 mask = b.moves.n == 0 ? u64(-1) : _solver::base_mask[b.moves.a[b.moves.n - 1]];
+                    std::array<typename _solver::t_state, _solver::n_base> adj_b = s.adj(b.state);
+                    for (u64 i = _solver::n_base - 1; i < _solver::n_base; i--) {
+                        if ((mask >> i) & u64(1)) {
+                            typename _solver::t_state state_c = adj_b[i];
+                            auto[dist_c, hint_c] = get_distance_hint<_solver>(s, state_c, b.hint);
+                            if (b.moves.n + 1 + dist_c <= n_moves) {
+                                node c{
+                                        state_c,
+                                        hint_c,
+                                        t_moves<capacity>{u8(b.moves.n + 1), b.moves.a}
+                                };
+                                c.moves.a[b.moves.n] = i;
+                                stack[stack_size] = c;
+                                stack_size++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        static void dfs_multi(
+                const _solver &s, const std::vector<node> &nodes, u64 n_moves,
+                const std::vector<u64> &tasks, const std::vector<u64> &split, std::vector<u64> &count,
+                std::tuple<u64, t_moves<capacity>> &result, volatile bool &stop, u64 thread_id) {
+            u64 start = split[thread_id];
+            u64 end = split[thread_id + 1];
+            for (u64 i = start; not stop and i < end; i++) {
+                u64 j = tasks[i];
+                dfs_one(s, nodes[j], n_moves, count[j], result, stop);
+                u64 f = std::get<0>(result);
+                if (f & flag::solution) {
+                    break;
+                }
+            }
+        }
+
+        static void dfs_all(
+                const _solver &s, const std::vector<node> &nodes, u64 n_thread, u64 n_moves,
+                const std::vector<u64> &tasks, const std::vector<u64> &split, std::vector<u64> &count,
+                std::vector<std::tuple<u64, t_moves<capacity>>> &result, volatile bool &stop) {
+            std::vector<std::future<void>> future{};
+            for (u64 i = 0; i < n_thread; i++) {
+                future.push_back(std::async(
+                        std::launch::async,
+                        &thread_dfs<_solver, capacity>::dfs_multi,
+                        std::cref(s), std::cref(nodes), n_moves,
+                        std::cref(tasks), std::cref(split), std::ref(count),
+                        std::ref(result[i]), std::ref(stop), i));
+            }
+            for (u64 i = 0; i < n_thread; i++) {
+                future[i].get();
+            }
+        }
+
+        const _solver &s;
+        const std::vector<node> &nodes;
+        const u64 n_thread;
+
+        thread_dfs(const _solver &_s, const std::vector<node> &_nodes, u64 _n_thread) :
+                s(_s), nodes(_nodes), n_thread(_n_thread) {
+        }
+
+        std::tuple<u64, t_moves<capacity>> run(
+                u64 n_moves,
+                const std::vector<u64> &tasks, const std::vector<u64> &split, std::vector<u64> &count) const {
+            u64 n_nodes = nodes.size();
+            for (u64 i = 0; i < n_nodes; i++) {
+                count[i] = 0;
+            }
+            std::vector<std::tuple<u64, t_moves<capacity>>> result(
+                    n_thread, {flag::none, t_moves<capacity>{u8(0), {}}});
+            volatile bool stop = false;
+            dfs_all(s, nodes, n_thread, n_moves, tasks, split, count, result, stop);
+            for (u64 i = 0; i < n_thread; i++) {
+                u64 f = std::get<0>(result[i]);
+                if (f & flag::solution) {
+                    return result[i];
+                }
+            }
+            return {flag::none, t_moves<capacity>{u8(0), {}}};
+        }
+    };
+
+    struct simple_schedule {
+        static constexpr char name[] = "simple";
+
+        static void call(
+                u64 n_thread, const std::vector<bool> &required,
+                std::vector<u64> &tasks, std::vector<u64> &split, const std::vector<u64> &count) {
+            u64 n_nodes = required.size();
+            u64 k = 0;
+            for (u64 i = 0; i < n_thread; i++) {
+                split[i] = k;
+                for (u64 j = i; j < n_nodes; j += n_thread) {
+                    if (required[j]) {
+                        tasks[k] = j;
+                        k++;
+                    }
+                }
+            }
+            split[n_thread] = k;
+        }
+    };
+
+    struct linear_schedule {
+        static constexpr char name[] = "linear";
+
+        static void call(
+                u64 n_thread, const std::vector<bool> &required,
+                std::vector<u64> &tasks, std::vector<u64> &split, const std::vector<u64> &count) {
+            u64 n_nodes = required.size();
+
+            u64 n_tasks = 0;
+            for (u64 j = 0; j < n_nodes; j++) {
+                if (required[j]) {
+                    tasks[n_tasks] = j;
+                    n_tasks++;
+                }
+            }
+
+            u64 total_count = 0;
+            std::vector<u64> accumulate(n_tasks, 0);
+            {
+                u64 a = 0;
+                u64 b = 0;
+                for (u64 k = 0; k < n_tasks; k++) {
+                    u64 c = count[tasks[k]] + 1;
+                    total_count += c;
+                    a = a + b + c;
+                    b = c;
+                    accumulate[k] = a;
+                }
+            }
+            assert(total_count * 2 * n_thread / n_thread == total_count * 2);
+
+            u64 k = 0;
+            for (u64 i = 0; i < n_thread; i++) {
+                while (accumulate[k] * n_thread < i * total_count * 2) {
+                    k++;
+                }
+                split[i] = k;
+            }
+            split[n_thread] = n_tasks;
+        }
+    };
+
+    struct best_schedule {
+        static constexpr char name[] = "best";
+
+        static void call(
+                u64 n_thread, const std::vector<bool> &required,
+                std::vector<u64> &tasks, std::vector<u64> &split, const std::vector<u64> &count) {
+            u64 n_nodes = required.size();
+
+            u64 n_tasks = 0;
+            for (u64 j = 0; j < n_nodes; j++) {
+                if (required[j]) {
+                    tasks[n_tasks] = j;
+                    n_tasks++;
+                }
+            }
+            std::stable_sort(tasks.begin(), tasks.begin() + n_tasks, [&count](u64 i, u64 j) -> bool {
+                return count[i] > count[j];
+            });
+
+            std::fill(split.begin(), split.end(), 0);
+
+            std::vector<u64> heap(n_thread, 0);
+            std::iota(heap.begin(), heap.end(), 0);
+            std::vector<u64> thread_count(n_thread, 0);
+            auto down = [&thread_count](u64 i, u64 j) -> bool {
+                if (thread_count[i] > thread_count[j]) {
+                    return true;
+                } else if (thread_count[i] == thread_count[j]) {
+                    return i > j;
+                } else {
+                    return false;
+                }
+            };
+
+            std::vector<u64> assignment(n_nodes, u64(-1));
+            for (u64 k = 0; k < n_tasks; k++) {
+                std::pop_heap(heap.begin(), heap.end(), down);
+                u64 i = heap[n_thread - 1];
+                u64 j = tasks[k];
+                assignment[j] = i;
+                split[i + 1]++;
+                thread_count[i] += count[j] + 1;
+                std::push_heap(heap.begin(), heap.end(), down);
+            }
+
+            std::stable_sort(tasks.begin(), tasks.begin() + n_tasks, [&assignment](u64 i, u64 j) -> bool {
+                if (assignment[i] < assignment[j]) {
+                    return true;
+                } else if (assignment[i] == assignment[j]) {
+                    return i < j;
+                } else {
+                    return false;
+                }
+            });
+
+            for (u64 i = 0; i < n_thread; i++) {
+                split[i + 1] += split[i];
+            }
+        }
+    };
+
+    double _efficiency(
+            u64 n_thread, u64 addition,
+            const std::vector<u64> &tasks, const std::vector<u64> &split, const std::vector<u64> &count) {
+        u64 total_count = 0;
+        u64 max_thread_count = 0;
+        for (u64 i = 0; i < n_thread; i++) {
+            u64 start = split[i];
+            u64 end = split[i + 1];
+            u64 thread_count = 0;
+            for (u64 k = start; k < end; k++) {
+                thread_count += count[tasks[k]] + addition;
+            }
+            total_count = total_count + thread_count;
+            max_thread_count = std::max(max_thread_count, thread_count);
+        }
+        return double(total_count) / double(max_thread_count * n_thread);
+    }
+
+    template<typename _solver, u64 capacity, typename parallel_dfs, typename schedule>
+    struct parallel_ida_star {
+        typedef ida_star_node<_solver, capacity> node;
+
+        static std::tuple<u64, t_moves<capacity>, std::vector<node>, std::vector<u8>> bfs(
+                const _solver &s, const typename _solver::t_cube &a, u64 max_n_moves, u64 bfs_count) {
+            std::cout << "parallel_ida_star.bfs: bfs_count=" << bfs_count << std::endl;
+            std::vector<node> nodes{};
+            std::vector<u8> dists{};
+
+            {
+                typename _solver::t_state state_a = s.cube_to_state(a);
+                auto[dist_a, hint_a] = get_distance<_solver>(s, state_a);
+                if (dist_a <= max_n_moves) {
+                    node node_a{
+                            state_a,
+                            hint_a,
+                            t_moves<capacity>{u8(0), {}}
+                    };
+                    if (dist_a == 0 and s.is_start(state_a)) {
+                        std::cout << "parallel_ida_star.bfs: found, n_moves=" << 0
+                                  << ", count=" << nodes.size() << std::endl;
+                        return {flag::solution | flag::optimum, node_a.moves, {}, {}};
+                    }
+                    nodes.push_back(node_a);
+                    dists.push_back(u8(dist_a));
+                }
+                std::cout << "parallel_ida_star.bfs: complete, n_moves=" << 0
+                          << ", count=" << nodes.size() << std::endl;
+                if (nodes.empty()) {
+                    std::cout << "parallel_ida_star.bfs: end" << std::endl;
+                    return {flag::end, t_moves<capacity>{u8(0), {}}, {}, {}};
+                }
+            }
+
+            for (u64 n_moves = 1; n_moves <= max_n_moves and nodes.size() < bfs_count; n_moves++) {
+                std::vector<node> next_nodes{};
+                std::vector<u8> next_dists{};
+                for (const node &b: nodes) {
+                    u64 mask = (b.moves.n == 0 ? u64(-1) : _solver::base_mask[b.moves.a[b.moves.n - 1]])
+                               & get_sym_mask<_solver, capacity>::call(s, a, b);
+                    std::array<typename _solver::t_state, _solver::n_base> adj_b = s.adj(b.state);
+                    for (u64 i = 0; i < _solver::n_base; i++) {
+                        if ((mask >> i) & u64(1)) {
+                            typename _solver::t_state state_c = adj_b[i];
+                            auto[dist_c, hint_c] = get_distance_hint<_solver>(s, state_c, b.hint);
+                            if (b.moves.n + 1 + dist_c <= max_n_moves) {
+                                node c{
+                                        state_c,
+                                        hint_c,
+                                        t_moves<capacity>{u8(b.moves.n + 1), b.moves.a}
+                                };
+                                c.moves.a[b.moves.n] = i;
+                                if (dist_c == 0 and s.is_start(state_c)) {
+                                    std::cout << "parallel_ida_star.bfs: found, n_moves=" << n_moves
+                                              << ", count=" << nodes.size() << std::endl;
+                                    return {flag::solution | flag::optimum, c.moves, {}, {}};
+                                }
+                                next_nodes.push_back(c);
+                                next_dists.push_back(u8(dist_c));
+                            }
+                        }
+                    }
+                }
+                nodes = std::move(next_nodes);
+                dists = std::move(next_dists);
+                std::cout << "parallel_ida_star.bfs: complete, n_moves=" << n_moves
+                          << ", count=" << nodes.size() << std::endl;
+                if (nodes.empty()) {
+                    std::cout << "parallel_ida_star.bfs: end" << std::endl;
+                    return {flag::end, t_moves<capacity>{u8(0), {}}, {}, {}};
+                }
+            }
+
+            return {flag::none, t_moves<capacity>{u8(0), {}}, nodes, dists};
+        }
+
+        static std::tuple<u64, t_moves<capacity>> run(
+                const _solver &s, const typename parallel_dfs::solver &p_s, const typename _solver::t_cube &a,
+                u64 n_thread, u64 _max_n_moves, u64 bfs_count) {
+            auto t0 = std::chrono::steady_clock::now();
+            u64 max_n_moves = std::min(_max_n_moves, capacity);
+            auto[f, moves, nodes, dists] = bfs(s, a, max_n_moves, bfs_count);
+            if ((f & flag::solution) or (f & flag::end)) {
+                return {f, moves};
+            }
+
+            std::cout << "parallel_ida_star: dfs=" << parallel_dfs::name
+                      << ", schedule=" << schedule::name
+                      << ", n_thread=" << n_thread << std::endl;
+            parallel_dfs dfs(p_s, nodes, n_thread);
+            u64 n_nodes = nodes.size();
+            std::vector<bool> required(n_nodes, false);
+            std::vector<u64> tasks(n_nodes, 0);
+            std::vector<u64> split(n_thread + 1, 0);
+            std::vector<u64> count(n_nodes, 0);
+            u64 bfs_n_moves = nodes[0].moves.n;
+            u64 min_dist = *std::min_element(dists.begin(), dists.end());
+            for (u64 n_moves = bfs_n_moves + min_dist; n_moves <= max_n_moves; n_moves++) {
+                auto t1 = std::chrono::steady_clock::now();
+                for (u64 i = 0; i < n_nodes; i++) {
+                    required[i] = (bfs_n_moves + dists[i] <= n_moves);
+                }
+                schedule::call(n_thread, required, tasks, split, count);
+                auto[f, moves] = dfs.run(n_moves, tasks, split, count);
+                auto t2 = std::chrono::steady_clock::now();
+                std::chrono::duration<double> d21 = t2 - t1;
+                std::chrono::duration<double> d20 = t2 - t0;
+                if (f & flag::solution) {
+                    std::cout << "parallel_ida_star: found, n_moves=" << n_moves
+                              << ", count=" << vector_sum<u64>(count)
+                              << ", efficiency=" << _efficiency(n_thread, 0, tasks, split, count)
+                              << ", layer_time=" << d21.count()
+                              << "s, total_time=" << d20.count() << "s" << std::endl;
+                    return {f, moves};
+                } else {
+                    std::cout << "parallel_ida_star: complete, n_moves=" << n_moves
+                              << ", count=" << vector_sum<u64>(count)
+                              << ", efficiency=" << _efficiency(n_thread, 0, tasks, split, count)
+                              << ", layer_time=" << d21.count()
+                              << "s, total_time=" << d20.count() << "s" << std::endl;
+                }
+            }
+
+            std::cout << "parallel_ida_star: end" << std::endl;
+            return {flag::end, t_moves<capacity>{u8(0), {}}};
+        }
+    };
 }
 
 #endif
