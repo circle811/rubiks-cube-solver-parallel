@@ -1,0 +1,48 @@
+    YYY
+    YYY
+    YYY
+
+BBB RRR GGG OOO
+BBB RRR GGG OOO
+BBB RRR GGG OOO
+
+    WWW
+    WWW
+    WWW
+;
+    GYG
+    YYY
+    GYG
+
+OBO YRY RGR WOW
+BBB RRR GGG OOO
+OBO YRY RGR WOW
+
+    BWB
+    WWW
+    BWB
+;
+    YGY
+    GYG
+    YGY
+
+BOB RYR GRG OWO
+OBO YRY RGR WOW
+BOB RYR GRG OWO
+
+    WBW
+    BWB
+    WBW
+;
+    GGG
+    GYY
+    GYY
+
+OOO YRR GGR WWW
+BBO YRR GGR WOO
+BBO YYY RRR WOO
+
+    BBB
+    WWB
+    WWB
+;
