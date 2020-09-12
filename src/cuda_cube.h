@@ -184,12 +184,14 @@ namespace cuda_cube {
     }
 
     template<typename _solver>
-    HOST_DEVICE
-    tuple<u64, typename _solver::t_hint> get_distance_hint(
-            const _solver &s, const typename _solver::t_state &a, const typename _solver::t_hint &hint) {
-        u64 d = computer_distance(s.distance_m3->get(s.state_to_int(a)), hint);
-        return {d, d};
-    }
+    struct get_distance_hint {
+        HOST_DEVICE
+        static tuple<u64, typename _solver::t_hint> call(
+                const _solver &s, const typename _solver::t_state &a, const typename _solver::t_hint &hint) {
+            u64 d = computer_distance(s.distance_m3->get(s.state_to_int(a)), hint);
+            return {d, d};
+        }
+    };
 
     template<u64 capacity>
     struct t_moves {
@@ -222,19 +224,20 @@ namespace cuda_cube {
     constexpr u64 n_s16 = 16;
     constexpr u64 n_s3 = 3;
 
-    struct p0es_solver {
+    template<typename U_SC, u64 _n_egp, u64 _n_sc_egp_eo, u64 _start_sc_egp_eo>
+    struct g_p0s_solver {
         struct t_state {
             u8 sym;
             u16 co;
-            u32 sc_egp_eo;
+            U_SC sc_egp_eo;
         };
 
         typedef u64 t_hint;
 
         static constexpr u64 n_co = 2187;
-        static constexpr u64 n_egp = 11880;
+        static constexpr u64 n_egp = _n_egp;
         static constexpr u64 n_eo = 2048;
-        static constexpr u64 n_sc_egp_eo = 1523864;
+        static constexpr u64 n_sc_egp_eo = _n_sc_egp_eo;
         static constexpr u64 n_state = n_co * n_sc_egp_eo;
         static constexpr u64 n_base = n_cube3_base;
 
@@ -245,7 +248,7 @@ namespace cuda_cube {
 
         HOST_DEVICE
         static constexpr bool is_start(const t_state &a) {
-            return a.co == 0 and a.sc_egp_eo == 0;
+            return a.co == 0 and a.sc_egp_eo == _start_sc_egp_eo;
         }
 
         device_ptr<array<u8, n_s16>> inv_s16;
@@ -254,14 +257,14 @@ namespace cuda_cube {
         device_ptr<array_2d<u8, n_base, n_s16> > conj_base;
         device_ptr<array_2d<u16, n_co, n_s16>> conj_co;
         device_ptr<array_2d<u16, n_co, n_base>> mul_co;
-        device_ptr<table_conj_mul<u32, u32, u16, n_egp * n_eo, n_sc_egp_eo, n_s16, n_base>> conj_mul_egp_eo;
+        device_ptr<table_conj_mul<u32, U_SC, u16, n_egp * n_eo, n_sc_egp_eo, n_s16, n_base>> conj_mul_egp_eo;
         device_ptr<array_u2<n_state>> distance_m3;
 
         HOST_DEVICE
         array<t_state, n_base> adj(const t_state &a) const {
             const array<u16, n_base> &a_co = (*mul_co)[a.co];
             const array<u8, n_base> &a_sym = conj_mul_egp_eo->mul_sc_sym[a.sc_egp_eo];
-            const array<u32, n_base> &a_sc = conj_mul_egp_eo->mul_sc_sc[a.sc_egp_eo];
+            const array<U_SC, n_base> &a_sc = conj_mul_egp_eo->mul_sc_sc[a.sc_egp_eo];
             array<t_state, n_base> a_s{};
             for (u64 i = 0; i < n_base; i++) {
                 u64 conj_i = (*conj_base)[i][(*inv_s16)[a.sym]];
@@ -312,9 +315,12 @@ namespace cuda_cube {
         }
     };
 
-    struct opt_solver {
+    template<typename _p0s_solver>
+    struct g_opt_solver {
+        typedef _p0s_solver p0s_solver;
+
         struct t_state {
-            array<p0es_solver::t_state, n_s3> p0es;
+            array<typename _p0s_solver::t_state, n_s3> p0s;
             c8_solver::t_state c8;
         };
 
@@ -325,7 +331,7 @@ namespace cuda_cube {
         HOST_DEVICE
         static constexpr bool is_start(const t_state &a) {
             for (u64 i = 0; i < n_s3; i++) {
-                if (not p0es_solver::is_start(a.p0es[i])) {
+                if (not _p0s_solver::is_start(a.p0s[i])) {
                     return false;
                 }
             }
@@ -334,16 +340,16 @@ namespace cuda_cube {
 
         device_ptr<array<u64, n_base>> base_mask;
         device_ptr<array_2d<u8, n_base, n_s3>> conj_base;
-        p0es_solver p0es_s;
+        _p0s_solver p0s_s;
         c8_solver c8_s;
 
         HOST_DEVICE
         array<t_state, n_base> adj(const t_state &a) const {
             array<t_state, n_base> a_s{};
             for (u64 j = 0; j < n_s3; j++) {
-                array<p0es_solver::t_state, n_base> adj_p = p0es_s.adj(a.p0es[j]);
+                array<typename _p0s_solver::t_state, n_base> adj_p = p0s_s.adj(a.p0s[j]);
                 for (u64 i = 0; i < n_base; i++) {
-                    a_s[i].p0es[j] = adj_p[(*conj_base)[i][j]];
+                    a_s[i].p0s[j] = adj_p[(*conj_base)[i][j]];
                 }
             }
             array<c8_solver::t_state, n_base> adj_c = c8_s.adj(a.c8);
@@ -354,10 +360,53 @@ namespace cuda_cube {
         }
     };
 
-    template<>
+    typedef g_p0s_solver<u32, 11880, 1523864, 0> p0sx_solver;
+    typedef g_opt_solver<p0sx_solver> optx_solver;
+
+    typedef g_p0s_solver<u32, 34650, 4443210, 4586> p0sy_solver;
+    typedef g_opt_solver<p0sy_solver> opty_solver;
+
     HOST_DEVICE
-    tuple<u64, typename opt_solver::t_hint> get_distance_hint<opt_solver>(
-            const opt_solver &s, const typename opt_solver::t_state &a, const typename opt_solver::t_hint &hint);
+    constexpr u64 min(u64 x, u64 y) {
+        return x <= y ? x : y;
+    }
+
+    HOST_DEVICE
+    constexpr u64 max(u64 x, u64 y) {
+        return x >= y ? x : y;
+    }
+
+    template<typename _p0s_solver>
+    struct get_distance_hint<g_opt_solver<_p0s_solver>> {
+        typedef g_opt_solver<_p0s_solver> _solver;
+
+        HOST_DEVICE
+        static tuple<u64, typename _solver::t_hint> call(
+                const _solver &s, const typename _solver::t_state &a, const typename _solver::t_hint &hint) {
+            u64 min_d = u64(-1);
+            u64 max_d = 0;
+            typename _solver::t_hint r_hint{};
+            for (u64 i = 0; i < n_s3; i++) {
+                auto t = get_distance_hint<_p0s_solver>::call(s.p0s_s, a.p0s[i], hint[i]);
+                auto d = t.item0;
+                auto h = t.item1;
+                min_d = min(min_d, d);
+                max_d = max(max_d, d);
+                r_hint[i] = u8(h);
+            }
+            if (max_d == min_d and max_d > 0) {
+                max_d++;
+            }
+            {
+                auto t = get_distance_hint<c8_solver>::call(s.c8_s, a.c8, hint[n_s3]);
+                auto d = t.item0;
+                auto h = t.item1;
+                max_d = max(max_d, d);
+                r_hint[n_s3] = u8(h);
+            }
+            return {max_d, r_hint};
+        }
+    };
 }
 
 #endif

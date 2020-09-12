@@ -8,24 +8,25 @@
 #include "cuda_cube.h"
 
 namespace cuda_cube {
-    struct opt_solver_manager {
-        opt_solver hd;
-        device_ptr<opt_solver> dd;
+    template<typename _h_opt_solver, typename _d_opt_solver>
+    struct g_opt_solver_manager {
+        _d_opt_solver hd;
+        device_ptr<_d_opt_solver> dd;
 
-        opt_solver_manager(const cube::_3::opt::opt_solver &s) {
+        g_opt_solver_manager(const _h_opt_solver &s) {
             t_memcpy_h_to_d(dd.get(), &hd);
 
-            t_memcpy_h_to_d(hd.base_mask.get(), &cube::_3::opt::opt_solver::base_mask);
-            t_memcpy_h_to_d(hd.conj_base.get(), &cube::_3::opt::opt_solver::conj_base);
+            t_memcpy_h_to_d(hd.base_mask.get(), &_h_opt_solver::base_mask);
+            t_memcpy_h_to_d(hd.conj_base.get(), &_h_opt_solver::conj_base);
 
-            t_memcpy_h_to_d(hd.p0es_s.inv_s16.get(), &cube::_3::inv_s16);
-            t_memcpy_h_to_d(hd.p0es_s.mul_s16.get(), &cube::_3::mul_s16);
-            t_memcpy_h_to_d(hd.p0es_s.base_mask.get(), &cube::_3::opt::p0es_solver::base_mask);
-            t_memcpy_h_to_d(hd.p0es_s.conj_base.get(), &cube::_3::opt::p0es_solver::conj_base);
-            t_memcpy_h_to_d(hd.p0es_s.conj_co.get(), s.p0es_s.conj_co.get());
-            t_memcpy_h_to_d(hd.p0es_s.mul_co.get(), s.p0es_s.mul_co.get());
-            t_memcpy_h_to_d(hd.p0es_s.conj_mul_egp_eo.get(), s.p0es_s.conj_mul_egp_eo.get());
-            t_memcpy_h_to_d(hd.p0es_s.distance_m3.get(), s.p0es_s.distance_m3.get());
+            t_memcpy_h_to_d(hd.p0s_s.inv_s16.get(), &cube::_3::inv_s16);
+            t_memcpy_h_to_d(hd.p0s_s.mul_s16.get(), &cube::_3::mul_s16);
+            t_memcpy_h_to_d(hd.p0s_s.base_mask.get(), &_h_opt_solver::p0s_solver::base_mask);
+            t_memcpy_h_to_d(hd.p0s_s.conj_base.get(), &_h_opt_solver::p0s_solver::conj_base);
+            t_memcpy_h_to_d(hd.p0s_s.conj_co.get(), s.p0s_s.conj_co.get());
+            t_memcpy_h_to_d(hd.p0s_s.mul_co.get(), s.p0s_s.mul_co.get());
+            t_memcpy_h_to_d(hd.p0s_s.conj_mul_egp_eo.get(), s.p0s_s.conj_mul_egp_eo.get());
+            t_memcpy_h_to_d(hd.p0s_s.distance_m3.get(), s.p0s_s.distance_m3.get());
 
             t_memcpy_h_to_d(hd.c8_s.base_mask.get(), &cube::_3::opt::c8_solver::base_mask);
             t_memcpy_h_to_d(hd.c8_s.mul_cp.get(), s.c8_s.mul_cp.get());
@@ -33,26 +34,26 @@ namespace cuda_cube {
             t_memcpy_h_to_d(hd.c8_s.distance_m3.get(), s.c8_s.distance_m3.get());
         }
 
-        const opt_solver &get() const {
+        const _d_opt_solver &get() const {
             return *dd;
         }
     };
 
-    template<typename _h_solver, typename _solver, u64 capacity>
+    template<typename _h_solver, typename _d_solver, u64 capacity>
     struct cuda_dfs {
         static constexpr char name[] = "cuda";
 
-        typedef _solver solver;
+        typedef _d_solver solver;
 
         typedef cube::ida_star_node<_h_solver, capacity> h_node;
-        typedef ida_star_node<_solver, capacity> node;
+        typedef ida_star_node<_d_solver, capacity> node;
 
         static_assert(sizeof(h_node::state) == sizeof(node::state), "");
         static_assert(sizeof(h_node::hint) == sizeof(node::hint), "");
         static_assert(sizeof(h_node::moves) == sizeof(node::moves), "");
         static_assert(sizeof(h_node) == sizeof(node), "");
 
-        const _solver &s;
+        const _d_solver &s;
         const u64 n_nodes;
         vector<node> nodes;
         const u64 n_thread;
@@ -63,7 +64,7 @@ namespace cuda_cube {
         std::vector<tuple<u64, t_moves<capacity>>> h_result;
         device_ptr<bool> stop;
 
-        cuda_dfs(const _solver &_s, const std::vector<h_node> &h_nodes, u64 _n_thread) :
+        cuda_dfs(const _d_solver &_s, const std::vector<h_node> &h_nodes, u64 _n_thread) :
                 s(_s), n_nodes(h_nodes.size()), nodes(n_nodes), n_thread(_n_thread),
                 tasks(n_nodes), split(n_thread + 1), count(n_nodes),
                 result(n_thread), h_result(n_thread), stop() {
@@ -78,7 +79,7 @@ namespace cuda_cube {
             t_set_zero(&count[0], n_nodes);
             t_set_zero(&result[0], n_thread);
             t_set_zero(stop.get(), 1);
-            dfs_all<_solver, capacity>(s, nodes, n_thread, n_moves, tasks, split, count, result, *stop);
+            dfs_all<_d_solver, capacity>(s, nodes, n_thread, n_moves, tasks, split, count, result, *stop);
             t_memcpy_d_to_h(&h_count[0], &count[0], n_nodes);
             t_memcpy_d_to_h(&h_result[0], &result[0], n_thread);
             for (u64 i = 0; i < n_thread; i++) {

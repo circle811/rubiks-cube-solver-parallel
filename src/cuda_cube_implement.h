@@ -88,7 +88,7 @@ namespace cuda_cube {
                 for (u64 i = _solver::n_base - 1; i < _solver::n_base; i--) {
                     if ((mask >> i) & u64(1)) {
                         typename _solver::t_state state_c = adj_b[i];
-                        auto t = get_distance_hint<_solver>(s, state_c, b.hint);
+                        auto t = get_distance_hint<_solver>::call(s, state_c, b.hint);
                         auto dist_c = t.item0;
                         auto hint_c = t.item1;
                         if (b.moves.n + 1 + dist_c <= n_moves) {
@@ -170,48 +170,16 @@ namespace cuda_cube {
 #endif
 
     template
-    void dfs_all<opt_solver, 20>(
-            const opt_solver &s, const vector<ida_star_node<opt_solver, 20>> &nodes, u64 n_thread, u64 n_moves,
+    void dfs_all<optx_solver, 20>(
+            const optx_solver &s, const vector<ida_star_node<optx_solver, 20>> &nodes, u64 n_thread, u64 n_moves,
             const vector<u64> &tasks, const vector<u64> &split, vector<u64> &count,
             vector<tuple<u64, t_moves<20>>> &result, volatile bool &stop);
 
-    HOST_DEVICE
-    constexpr u64 min(u64 x, u64 y) {
-        return x <= y ? x : y;
-    }
-
-    HOST_DEVICE
-    constexpr u64 max(u64 x, u64 y) {
-        return x >= y ? x : y;
-    }
-
-    template<>
-    HOST_DEVICE
-    tuple<u64, typename opt_solver::t_hint> get_distance_hint<opt_solver>(
-            const opt_solver &s, const typename opt_solver::t_state &a, const typename opt_solver::t_hint &hint) {
-        u64 min_d = u64(-1);
-        u64 max_d = 0;
-        opt_solver::t_hint r_hint{};
-        for (u64 i = 0; i < n_s3; i++) {
-            auto t = get_distance_hint<p0es_solver>(s.p0es_s, a.p0es[i], hint[i]);
-            auto d = t.item0;
-            auto h = t.item1;
-            min_d = min(min_d, d);
-            max_d = max(max_d, d);
-            r_hint[i] = u8(h);
-        }
-        if (max_d == min_d and max_d > 0) {
-            max_d++;
-        }
-        {
-            auto t = get_distance_hint<c8_solver>(s.c8_s, a.c8, hint[n_s3]);
-            auto d = t.item0;
-            auto h = t.item1;
-            max_d = max(max_d, d);
-            r_hint[n_s3] = u8(h);
-        }
-        return {max_d, r_hint};
-    }
+    template
+    void dfs_all<opty_solver, 20>(
+            const opty_solver &s, const vector<ida_star_node<opty_solver, 20>> &nodes, u64 n_thread, u64 n_moves,
+            const vector<u64> &tasks, const vector<u64> &split, vector<u64> &count,
+            vector<tuple<u64, t_moves<20>>> &result, volatile bool &stop);
 }
 
 #endif
