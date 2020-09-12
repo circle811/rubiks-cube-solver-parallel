@@ -191,39 +191,43 @@ namespace cube {
                   << ", total_time=" << d.count() << "s" << std::endl;
     }
 
-    template<typename _solver>
-    std::tuple<u64, typename _solver::t_hint> get_distance(const _solver &s, const typename _solver::t_state &a) {
-        typename _solver::t_state b = a;
-        u64 i = s.state_to_int(b);
-        u64 depth = 0;
-        while (not s.is_start(b)) {
-            u64 target = (s.distance_m3->get(i) + 2) % 3;
-            bool found = false;
-            for (const typename _solver::t_state &c: s.adj(b)) {
-                u64 j = s.state_to_int(c);
-                if (s.distance_m3->get(j) == target) {
-                    b = c;
-                    i = j;
-                    depth++;
-                    found = true;
-                    break;
-                }
-            }
-            assert (found);
-        }
-        return {depth, depth};
-    }
-
     constexpr u64 computer_distance(u64 distance_m3, u64 distance_adj) {
         return distance_adj + (distance_m3 - distance_adj - 3) % 3 - 1;
     }
 
     template<typename _solver>
-    std::tuple<u64, typename _solver::t_hint> get_distance_hint(
-            const _solver &s, const typename _solver::t_state &a, const typename _solver::t_hint &hint) {
-        u64 d = computer_distance(s.distance_m3->get(s.state_to_int(a)), hint);
-        return {d, d};
-    }
+    struct get_distance {
+        static std::tuple<u64, typename _solver::t_hint> call(const _solver &s, const typename _solver::t_state &a) {
+            typename _solver::t_state b = a;
+            u64 i = s.state_to_int(b);
+            u64 depth = 0;
+            while (not s.is_start(b)) {
+                u64 target = (s.distance_m3->get(i) + 2) % 3;
+                bool found = false;
+                for (const typename _solver::t_state &c: s.adj(b)) {
+                    u64 j = s.state_to_int(c);
+                    if (s.distance_m3->get(j) == target) {
+                        b = c;
+                        i = j;
+                        depth++;
+                        found = true;
+                        break;
+                    }
+                }
+                assert (found);
+            }
+            return {depth, depth};
+        }
+    };
+
+    template<typename _solver>
+    struct get_distance_hint {
+        static std::tuple<u64, typename _solver::t_hint> call(
+                const _solver &s, const typename _solver::t_state &a, const typename _solver::t_hint &hint) {
+            u64 d = computer_distance(s.distance_m3->get(s.state_to_int(a)), hint);
+            return {d, d};
+        }
+    };
 
     template<u64 capacity>
     struct t_moves {
@@ -316,7 +320,7 @@ namespace cube {
         ida_star(const _solver &_s, const typename _solver::t_cube &_a, u64 _max_n_moves, u64 _sym_mask_n_moves = 0) :
                 s(_s), a(_a), max_n_moves(std::min(_max_n_moves, capacity)), sym_mask_n_moves(_sym_mask_n_moves) {
             typename _solver::t_state state_a = s.cube_to_state(_a);
-            auto[dist_a, hint_a] = get_distance<_solver>(s, state_a);
+            auto[dist_a, hint_a] = get_distance<_solver>::call(s, state_a);
             n_moves = std::min(dist_a, max_n_moves);
             optimum_n_moves = u64(-1);;
             end = false;
@@ -398,7 +402,7 @@ namespace cube {
                         for (u64 i = _solver::n_base - 1; i < _solver::n_base; i--) {
                             if ((mask >> i) & u64(1)) {
                                 typename _solver::t_state state_c = adj_b[i];
-                                auto[dist_c, hint_c] = get_distance_hint<_solver>(s, state_c, b.hint);
+                                auto[dist_c, hint_c] = get_distance_hint<_solver>::call(s, state_c, b.hint);
                                 if (b.moves.n + 1 + dist_c <= n_moves) {
                                     node c{
                                             state_c,
@@ -579,7 +583,7 @@ namespace cube {
                     for (u64 i = _solver::n_base - 1; i < _solver::n_base; i--) {
                         if ((mask >> i) & u64(1)) {
                             typename _solver::t_state state_c = adj_b[i];
-                            auto[dist_c, hint_c] = get_distance_hint<_solver>(s, state_c, b.hint);
+                            auto[dist_c, hint_c] = get_distance_hint<_solver>::call(s, state_c, b.hint);
                             if (b.moves.n + 1 + dist_c <= n_moves) {
                                 node c{
                                         state_c,
@@ -813,7 +817,7 @@ namespace cube {
 
             {
                 typename _solver::t_state state_a = s.cube_to_state(a);
-                auto[dist_a, hint_a] = get_distance<_solver>(s, state_a);
+                auto[dist_a, hint_a] = get_distance<_solver>::call(s, state_a);
                 if (dist_a <= max_n_moves) {
                     node node_a{
                             state_a,
@@ -846,7 +850,7 @@ namespace cube {
                     for (u64 i = 0; i < _solver::n_base; i++) {
                         if ((mask >> i) & u64(1)) {
                             typename _solver::t_state state_c = adj_b[i];
-                            auto[dist_c, hint_c] = get_distance_hint<_solver>(s, state_c, b.hint);
+                            auto[dist_c, hint_c] = get_distance_hint<_solver>::call(s, state_c, b.hint);
                             if (b.moves.n + 1 + dist_c <= max_n_moves) {
                                 node c{
                                         state_c,
