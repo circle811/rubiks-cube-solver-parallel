@@ -14,10 +14,6 @@ namespace cube::_3::opt {
             cube3::i(), AU1 * AF1, (AU1 * AF1).inv()
     };
 
-    typedef orbits <orbit<0>, orbit<1>, orbit<2>, orbit<3>, orbit<4, 5, 6, 7, 8, 9, 10, 11>> os_1x4_8;
-    constexpr char _p0es[] = "p0es";
-    typedef _2p::g_p0s_solver<os_1x4_8, u32, 1523864, _p0es> p0es_solver;
-
     struct c8_solver {
         typedef cube3 t_cube;
         typedef u64 t_state;
@@ -160,11 +156,14 @@ namespace cube::_3::opt {
         }
     };
 
-    struct opt_solver {
+    template<typename _p0s_solver>
+    struct g_opt_solver {
+        typedef _p0s_solver p0s_solver;
+
         typedef cube3 t_cube;
 
         struct t_state {
-            std::array<p0es_solver::t_state, n_s3> p0es;
+            std::array<typename _p0s_solver::t_state, n_s3> p0s;
             c8_solver::t_state c8;
         };
 
@@ -181,16 +180,16 @@ namespace cube::_3::opt {
                 generate_table_conj_base<cube3, n_base, n_s3>(base, elements_s3);
 
         u64 n_thread;
-        p0es_solver p0es_s;
+        _p0s_solver p0s_s;
         c8_solver c8_s;
 
-        explicit opt_solver(u64 _n_thread) : n_thread(_n_thread), p0es_s(_n_thread), c8_s(_n_thread) {
+        explicit g_opt_solver(u64 _n_thread) : n_thread(_n_thread), p0s_s(_n_thread), c8_s(_n_thread) {
         }
 
         t_state cube_to_state(const t_cube &a) const {
             t_state b{};
             for (u64 i = 0; i < n_s3; i++) {
-                b.p0es[i] = p0es_s.cube_to_state(elements_s3[i].inv() * a * elements_s3[i]);
+                b.p0s[i] = p0s_s.cube_to_state(elements_s3[i].inv() * a * elements_s3[i]);
             }
             b.c8 = c8_s.cube_to_state(a);
             return b;
@@ -198,7 +197,7 @@ namespace cube::_3::opt {
 
         bool is_start(const t_state &a) const {
             for (u64 i = 0; i < n_s3; i++) {
-                if (not p0es_s.is_start(a.p0es[i])) {
+                if (not p0s_s.is_start(a.p0s[i])) {
                     return false;
                 }
             }
@@ -208,9 +207,9 @@ namespace cube::_3::opt {
         std::array<t_state, n_base> adj(const t_state &a) const {
             std::array<t_state, n_base> a_s{};
             for (u64 j = 0; j < n_s3; j++) {
-                std::array<p0es_solver::t_state, n_base> adj_p = p0es_s.adj(a.p0es[j]);
+                std::array<typename _p0s_solver::t_state, n_base> adj_p = p0s_s.adj(a.p0s[j]);
                 for (u64 i = 0; i < n_base; i++) {
-                    a_s[i].p0es[j] = adj_p[conj_base[i][j]];
+                    a_s[i].p0s[j] = adj_p[conj_base[i][j]];
                 }
             }
             std::array<c8_solver::t_state, n_base> adj_c = c8_s.adj(a.c8);
@@ -221,11 +220,21 @@ namespace cube::_3::opt {
         }
 
         template<u64 capacity>
-        ida_star <opt_solver, capacity> solve(
+        ida_star <g_opt_solver<_p0s_solver>, capacity> solve(
                 const t_cube &a, u64 max_n_moves = capacity, u64 sym_mask_n_moves = 0) const {
-            return ida_star<opt_solver, capacity>(*this, a, max_n_moves, sym_mask_n_moves);
+            return ida_star<g_opt_solver<_p0s_solver>, capacity>(*this, a, max_n_moves, sym_mask_n_moves);
         }
     };
+
+    constexpr char _p0sx[] = "p0sx";
+    typedef orbits <orbit<0>, orbit<1>, orbit<2>, orbit<3>, orbit<4, 5, 6, 7, 8, 9, 10, 11>> os_1x4_8;
+    typedef _2p::g_p0s_solver<os_1x4_8, u32, 1523864, _p0sx> p0sx_solver;
+    typedef g_opt_solver<p0sx_solver> optx_solver;
+
+    constexpr char _p0sy[] = "p0sy";
+    typedef orbits <orbit<0, 1, 2, 3>, orbit<4, 5, 8, 11>, orbit<6, 7, 9, 10>> os_4x3;
+    typedef _2p::g_p0s_solver<os_4x3, u32, 4443210, _p0sy> p0sy_solver;
+    typedef g_opt_solver<p0sy_solver> opty_solver;
 }
 
 namespace cube {
@@ -233,75 +242,84 @@ namespace cube {
     using cube::_3::elements_s48;
     using cube::_3::inv_s48;
     using cube::_3::opt::n_s3;
-    using cube::_3::opt::p0es_solver;
     using cube::_3::opt::c8_solver;
-    using cube::_3::opt::opt_solver;
+    using cube::_3::opt::g_opt_solver;
 
-    template<>
-    std::tuple<u64, typename opt_solver::t_hint> get_distance<opt_solver>(
-            const opt_solver &s, const typename opt_solver::t_state &a) {
-        u64 min_d = u64(-1);
-        u64 max_d = 0;
-        opt_solver::t_hint r_hint{};
-        for (u64 i = 0; i < n_s3; i++) {
-            auto[d, h] = get_distance<p0es_solver>(s.p0es_s, a.p0es[i]);
-            min_d = std::min(min_d, d);
-            max_d = std::max(max_d, d);
-            r_hint[i] = u8(h);
-        }
-        if (max_d == min_d and max_d > 0) {
-            max_d++;
-        }
-        {
-            auto[d, h] = get_distance<c8_solver>(s.c8_s, a.c8);
-            max_d = std::max(max_d, d);
-            r_hint[n_s3] = u8(h);
-        }
-        return {max_d, r_hint};
-    }
+    template<typename _p0s_solver>
+    struct get_distance<g_opt_solver<_p0s_solver>> {
+        typedef g_opt_solver<_p0s_solver> _solver;
 
-    template<>
-    std::tuple<u64, typename opt_solver::t_hint> get_distance_hint<opt_solver>(
-            const opt_solver &s, const typename opt_solver::t_state &a, const typename opt_solver::t_hint &hint) {
-        u64 min_d = u64(-1);
-        u64 max_d = 0;
-        opt_solver::t_hint r_hint{};
-        for (u64 i = 0; i < n_s3; i++) {
-            auto[d, h] = get_distance_hint<p0es_solver>(s.p0es_s, a.p0es[i], hint[i]);
-            min_d = std::min(min_d, d);
-            max_d = std::max(max_d, d);
-            r_hint[i] = u8(h);
+        static std::tuple<u64, typename _solver::t_hint> call(const _solver &s, const typename _solver::t_state &a) {
+            u64 min_d = u64(-1);
+            u64 max_d = 0;
+            typename _solver::t_hint r_hint{};
+            for (u64 i = 0; i < n_s3; i++) {
+                auto[d, h] = get_distance<_p0s_solver>::call(s.p0s_s, a.p0s[i]);
+                min_d = std::min(min_d, d);
+                max_d = std::max(max_d, d);
+                r_hint[i] = u8(h);
+            }
+            if (max_d == min_d and max_d > 0) {
+                max_d++;
+            }
+            {
+                auto[d, h] = get_distance<c8_solver>::call(s.c8_s, a.c8);
+                max_d = std::max(max_d, d);
+                r_hint[n_s3] = u8(h);
+            }
+            return {max_d, r_hint};
         }
-        if (max_d == min_d and max_d > 0) {
-            max_d++;
+    };
+
+    template<typename _p0s_solver>
+    struct get_distance_hint<g_opt_solver<_p0s_solver>> {
+        typedef g_opt_solver<_p0s_solver> _solver;
+
+        static std::tuple<u64, typename _solver::t_hint> call(
+                const _solver &s, const typename _solver::t_state &a, const typename _solver::t_hint &hint) {
+            u64 min_d = u64(-1);
+            u64 max_d = 0;
+            typename _solver::t_hint r_hint{};
+            for (u64 i = 0; i < n_s3; i++) {
+                auto[d, h] = get_distance_hint<_p0s_solver>::call(s.p0s_s, a.p0s[i], hint[i]);
+                min_d = std::min(min_d, d);
+                max_d = std::max(max_d, d);
+                r_hint[i] = u8(h);
+            }
+            if (max_d == min_d and max_d > 0) {
+                max_d++;
+            }
+            {
+                auto[d, h] = get_distance_hint<c8_solver>::call(s.c8_s, a.c8, hint[n_s3]);
+                max_d = std::max(max_d, d);
+                r_hint[n_s3] = u8(h);
+            }
+            return {max_d, r_hint};
         }
-        {
-            auto[d, h] = get_distance_hint<c8_solver>(s.c8_s, a.c8, hint[n_s3]);
-            max_d = std::max(max_d, d);
-            r_hint[n_s3] = u8(h);
-        }
-        return {max_d, r_hint};
-    }
+    };
 
     template<u64 capacity>
     struct get_sym_mask<c8_solver, capacity> {
+        typedef c8_solver _solver;
+
         static u64 call(
-                const c8_solver &s, const typename c8_solver::t_cube &a, const ida_star_node <c8_solver, capacity> &b) {
+                const _solver &s, const typename _solver::t_cube &a, const ida_star_node <_solver, capacity> &b) {
             u64 subgroup = s.get_self_sym_subgroup(b.state);
             return s.sym_mask.at(subgroup);
         }
     };
 
-    template<u64 capacity>
-    struct get_sym_mask<opt_solver, capacity> {
+    template<typename _p0s_solver, u64 capacity>
+    struct get_sym_mask<g_opt_solver<_p0s_solver>, capacity> {
+        typedef g_opt_solver<_p0s_solver> _solver;
+
         static u64 call(
-                const opt_solver &s, const typename opt_solver::t_cube &a,
-                const ida_star_node <opt_solver, capacity> &b) {
+                const _solver &s, const typename _solver::t_cube &a, const ida_star_node <_solver, capacity> &b) {
             u64 subgroup0 = s.c8_s.get_self_sym_subgroup(b.state.c8);
             if (subgroup0 == 1) {
                 return s.c8_s.sym_mask.at(subgroup0);
             }
-            typename opt_solver::t_cube bb = a * moves_to_cube<opt_solver, capacity>(b.moves);
+            typename _solver::t_cube bb = a * moves_to_cube<_solver, capacity>(b.moves);
             u64 subgroup1 = 0;
             for (u64 s = 0; s < n_s48; s++) {
                 if ((subgroup0 >> s) & u64(1)) {
