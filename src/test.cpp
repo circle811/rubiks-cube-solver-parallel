@@ -78,13 +78,19 @@ void test(u64 n_thread, u64 seed, bool full) {
     test_one<_2ps_solver, capacity, solved_check<_2ps_solver>>(
             n_thread, seed, n_cube, rand_n_moves, max_n_moves, max_n_solution);
 
-    test_one<p0es_solver, capacity, partial_check<p0es_solver>>(
-            n_thread, seed, n_cube, rand_n_moves, max_n_moves, max_n_solution);
-
     test_one<c8_solver, capacity, partial_check<c8_solver>>(
             n_thread, seed, n_cube, rand_n_moves, max_n_moves, max_n_solution);
 
-    test_one<opt_solver, capacity, solved_check<opt_solver>>(
+    test_one<p0sx_solver, capacity, partial_check<p0sx_solver>>(
+            n_thread, seed, n_cube, rand_n_moves, max_n_moves, max_n_solution);
+
+    test_one<optx_solver, capacity, solved_check<optx_solver>>(
+            n_thread, seed, n_cube, rand_n_moves, max_n_moves, max_n_solution);
+
+    test_one<p0sy_solver, capacity, partial_check<p0sy_solver>>(
+            n_thread, seed, n_cube, rand_n_moves, max_n_moves, max_n_solution);
+
+    test_one<opty_solver, capacity, solved_check<opty_solver>>(
             n_thread, seed, n_cube, rand_n_moves, max_n_moves, max_n_solution);
 
     if (full) {
@@ -108,12 +114,12 @@ void test(u64 n_thread, u64 seed, bool full) {
             n_thread, seed, n_cube, rand_n_moves, 7, 100);
 }
 
-std::string usage = R"(Usage
+std::string usage = R"(Usage:
 
 Test:
     %s  --n_thread 4  --seed 0
 
-Test Full
+Full Test:
     %s  --n_thread 4  --seed 0  --full
 )";
 
@@ -125,19 +131,16 @@ void parse_arg(int argc, char **argv, u64 &n_thread, u64 &seed, bool &full) {
             ("n_thread", "1~256", cxxopts::value<u64>(n_thread)->default_value("4"))
             ("seed", "0~max", cxxopts::value<u64>(seed)->default_value("0"))
             ("full", "bool", cxxopts::value<bool>(full)->default_value("false"))
-            ("usage", "show usage")
             ("help", "show help");
 
     try {
         cxxopts::ParseResult result = option.parse(argc, argv);
-        if (result.count("usage")) {
+        if (result.count("help") > 0) {
+            std::cout << option.help() << std::endl;
             u64 n = usage.size() + strlen(argv[0]) * 2;
             std::vector<char> buf(n, '\0');
             snprintf(&buf[0], n, usage.c_str(), argv[0], argv[0]);
             std::cout << &buf[0] << std::endl;
-            exit(0);
-        } else if (result.count("help")) {
-            std::cout << option.help() << std::endl;
             exit(0);
         }
     } catch (const cxxopts::OptionException &e) {
